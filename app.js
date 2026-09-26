@@ -16,6 +16,7 @@ const PLANT_CATEGORIES = [
   { id: "berries", label: "Berries", icon: "🍓" },
   { id: "alliums", label: "Alliums", icon: "🧅" },
   { id: "greens", label: "Greens", icon: "🥬" },
+  { id: "other", label: "Other", icon: "📦" },
 ];
 const COLORS = ["#4f8d5b", "#75a843", "#a7b43c", "#d8a62d", "#df7435", "#c94c49", "#a95a87", "#735ca7", "#3f83a8", "#3b8c83"];
 const STATUSES = ["planned", "seeded", "planted", "growing", "harvesting", "finished", "failed", "removed"];
@@ -190,6 +191,10 @@ function renderGarden() {
   </section>`;
 }
 
+function resizeHandles(kind, id) {
+  return ["nw", "ne", "sw", "se"].map((corner) => `<span class="resize-handle rh-${corner}" data-resize="${kind}" data-corner="${corner}" data-id="${id}"></span>`).join("");
+}
+
 function renderBed(bed) {
   const width = bed.widthIn * PX_PER_INCH;
   const height = bed.heightIn * PX_PER_INCH;
@@ -197,15 +202,20 @@ function renderBed(bed) {
   const quarterTurn = Math.abs(rotation % 180) === 90;
   const visualLeft = quarterTurn ? (width - height) / 2 : 0;
   const visualTop = quarterTurn ? (height - width) / 2 : 0;
+  const selected = state.selected?.type === "bed" && state.selected.id === bed.id;
+  const showHandles = !yearIsReadOnly() && state.mode === "layout" && selected;
   return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${width}px;height:${height}px">
-    <div class="bed ${state.mode === "layout" && state.selected?.type === "bed" && state.selected.id === bed.id ? "selected" : ""}" style="transform:rotate(${rotation}deg)"></div>
+    <div class="bed ${state.mode === "layout" && selected ? "selected" : ""}" style="transform:rotate(${rotation}deg)"></div>
     <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">[${bed.number}]</span>
+    ${showHandles ? resizeHandles("bed", bed.id) : ""}
   </div>`;
 }
 
 function renderPlantMarker(plant) {
   const seed = seedFor(plant);
-  return `<div class="plant-marker ${state.selected?.type === "plant" && state.selected.id === plant.id ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(seed.color || "#4f8d5b")};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span></div>`;
+  const selected = state.selected?.type === "plant" && state.selected.id === plant.id;
+  const showHandles = !yearIsReadOnly() && state.mode === "plants" && selected;
+  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(seed.color || "#4f8d5b")};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
 }
 
 function renderSelectionPlant(plant) {
@@ -510,11 +520,25 @@ function bindMap() {
   const pointers = new Map();
   let interaction = null;
   const point = (event) => ({ x: event.clientX, y: event.clientY });
+  const findItem = (kind, itemId) => (kind === "bed" ? state.data.beds.find((entry) => entry.id === itemId) : state.data.plants.find((entry) => entry.id === itemId));
   viewport.onpointerdown = (event) => {
     if (event.target.closest(".selection-card,button,input,select,textarea,label")) return;
     pointers.set(event.pointerId, point(event));
     viewport.setPointerCapture(event.pointerId);
     if (pointers.size >= 2) { interaction = null; return; }
+    const handle = event.target.closest("[data-resize]");
+    if (handle) {
+      const kind = handle.dataset.resize;
+      const handleId = handle.dataset.id;
+      const allowed = !yearIsReadOnly() && ((kind === "bed" && state.mode === "layout") || (kind === "plant" && state.mode === "plants"));
+      if (allowed) {
+        const item = findItem(kind, handleId);
+        const node = handle.closest(kind === "bed" ? ".bed-wrap" : ".plant-marker");
+        state.selected = { type: kind, id: handleId };
+        interaction = { type: `resize-${kind}`, id: handleId, corner: handle.dataset.corner, startX: event.clientX, startY: event.clientY, originalX: item.x, originalY: item.y, originalW: item.widthIn, originalH: item.heightIn, moved: false, node };
+      }
+      return;
+    }
     const target = event.target.closest("[data-kind]");
     const kind = target?.dataset.kind;
     const id = target?.dataset.id;
@@ -523,7 +547,7 @@ function bindMap() {
       const plantInteractive = kind === "plant" && state.mode === "plants";
       if (!yearIsReadOnly() && (bedInteractive || plantInteractive)) {
         state.selected = { type: kind, id };
-        const item = kind === "bed" ? state.data.beds.find((entry) => entry.id === id) : state.data.plants.find((entry) => entry.id === id);
+        const item = findItem(kind, id);
         interaction = { type: kind, id, startX: event.clientX, startY: event.clientY, originalX: item.x, originalY: item.y, moved: false, node: target };
       } else if (kind === "bed" && state.mode !== "layout") {
         interaction = { type: "pan", startX: event.clientX, startY: event.clientY, originalX: state.map.panX, originalY: state.map.panY, moved: false };
@@ -551,7 +575,39 @@ function bindMap() {
       apply();
       return;
     }
-    const item = interaction.type === "bed" ? state.data.beds.find((entry) => entry.id === interaction.id) : state.data.plants.find((entry) => entry.id === interaction.id);
+    if (interaction.type.startsWith("resize-")) {
+      const kind = interaction.type === "resize-bed" ? "bed" : "plant";
+      const grid = state.data.settings.gridIn;
+      const minSize = kind === "bed" ? Math.max(12, grid) : grid;
+      const maxW = state.data.settings.widthIn;
+      const maxH = state.data.settings.heightIn;
+      const inchDx = dx / state.map.zoom / PX_PER_INCH;
+      const inchDy = dy / state.map.zoom / PX_PER_INCH;
+      let x = interaction.originalX, y = interaction.originalY, w = interaction.originalW, h = interaction.originalH;
+      if (interaction.corner.includes("w")) {
+        const nx = clamp(snap(interaction.originalX + inchDx), 0, interaction.originalX + interaction.originalW - minSize);
+        w = interaction.originalW - (nx - interaction.originalX);
+        x = nx;
+      }
+      if (interaction.corner.includes("e")) {
+        w = clamp(snap(interaction.originalW + inchDx), minSize, maxW - interaction.originalX);
+      }
+      if (interaction.corner.includes("n")) {
+        const ny = clamp(snap(interaction.originalY + inchDy), 0, interaction.originalY + interaction.originalH - minSize);
+        h = interaction.originalH - (ny - interaction.originalY);
+        y = ny;
+      }
+      if (interaction.corner.includes("s")) {
+        h = clamp(snap(interaction.originalH + inchDy), minSize, maxH - interaction.originalY);
+      }
+      interaction.nextX = x; interaction.nextY = y; interaction.nextW = w; interaction.nextH = h;
+      interaction.node.style.left = `${x * PX_PER_INCH}px`;
+      interaction.node.style.top = `${y * PX_PER_INCH}px`;
+      interaction.node.style.width = `${w * PX_PER_INCH}px`;
+      interaction.node.style.height = `${h * PX_PER_INCH}px`;
+      return;
+    }
+    const item = findItem(interaction.type, interaction.id);
     const parent = state.data.settings;
     const maxX = parent.widthIn - item.widthIn;
     const maxY = parent.heightIn - item.heightIn;
@@ -564,8 +620,16 @@ function bindMap() {
   viewport.onpointerup = async (event) => {
     pointers.delete(event.pointerId);
     viewport.classList.remove("dragging");
-    if (interaction && interaction.type !== "pan" && interaction.moved) {
-      const item = interaction.type === "bed" ? state.data.beds.find((entry) => entry.id === interaction.id) : state.data.plants.find((entry) => entry.id === interaction.id);
+    if (interaction && interaction.type.startsWith("resize-") && interaction.moved) {
+      const kind = interaction.type === "resize-bed" ? "bed" : "plant";
+      const item = findItem(kind, interaction.id);
+      const patch = { ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y, widthIn: interaction.nextW ?? item.widthIn, heightIn: interaction.nextH ?? item.heightIn };
+      try {
+        if (kind === "bed") await window.SproutStore.saveBed(patch);
+        else await window.SproutStore.savePlant(patch);
+      } catch (error) { toast(error.message || "Could not resize that.", "error"); render(); }
+    } else if (interaction && interaction.type !== "pan" && !interaction.type.startsWith("resize-") && interaction.moved) {
+      const item = findItem(interaction.type, interaction.id);
       try {
         if (interaction.type === "bed") await window.SproutStore.saveBed({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
         else await window.SproutStore.savePlant({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
