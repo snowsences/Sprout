@@ -517,7 +517,13 @@ async function uploadPhoto(file, plantId) {
   if (SPROUT_CONFIG.cloudinaryWorkerUrl.startsWith("PASTE_")) throw new Error("Add the Cloudflare Worker URL to config.js before uploading photos.");
   const resized = await resizePhoto(file);
   const folder = `${SPROUT_CONFIG.cloudinaryFolder}/${SPROUT_CONFIG.householdId}/${plantId}`;
-  const signing = await fetch(SPROUT_CONFIG.cloudinaryWorkerUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sign", folder }) });
+  const idToken = await window.SproutStore.getIdToken();
+  if (!idToken) throw new Error("Sign in again before uploading photos.");
+  const signing = await fetch(SPROUT_CONFIG.cloudinaryWorkerUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ action: "sign", folder }),
+  });
   if (!signing.ok) throw new Error("Photo signing failed.");
   const signed = await signing.json();
   const form = new FormData();

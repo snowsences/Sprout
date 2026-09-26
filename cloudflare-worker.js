@@ -1,7 +1,7 @@
 /**
  * Cloudinary signing Worker for Sprout.
  * Required Worker secrets: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY,
- * CLOUDINARY_API_SECRET. Optional variable: ALLOWED_ORIGIN.
+ * CLOUDINARY_API_SECRET. Variables: ALLOWED_ORIGIN and FIREBASE_API_KEY.
  */
 const json = (body, status = 200, origin = "*") =>
   new Response(JSON.stringify(body), {
@@ -10,7 +10,7 @@ const json = (body, status = 200, origin = "*") =>
       "content-type": "application/json; charset=utf-8",
       "access-control-allow-origin": origin,
       "access-control-allow-methods": "POST, OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-headers": "content-type, authorization",
       vary: "Origin",
     },
   });
@@ -33,6 +33,23 @@ export default {
     if (request.method !== "POST") return json({ error: "POST only." }, 405, allowedOrigin);
 
     try {
+      const authorization = request.headers.get("Authorization") || "";
+      const idToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+      if (!idToken) return json({ error: "Sign-in required." }, 401, allowedOrigin);
+      const firebaseKey = env.FIREBASE_API_KEY || "AIzaSyACBAbzQtldDbDLBRKt4mSUQuzNrjps4f0";
+      const identityResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseKey}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!identityResponse.ok) return json({ error: "Invalid sign-in." }, 401, allowedOrigin);
+      const identity = await identityResponse.json();
+      const user = identity.users?.[0];
+      const email = String(user?.email || "").toLowerCase();
+      if (!user?.emailVerified || !["allenkevinc@gmail.com", "meganec96@gmail.com"].includes(email)) {
+        return json({ error: "Account not allowed." }, 403, allowedOrigin);
+      }
+
       const body = await request.json();
       if (body.action === "destroy") {
         const publicId = String(body.publicId || "");

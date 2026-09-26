@@ -175,6 +175,7 @@ if (configured) {
 
 window.SproutStore = {
   configured,
+  getIdToken: () => auth?.currentUser?.getIdToken(),
   signIn: () => {
     if (!configured) throw new Error("Add the new Firebase project values to config.js first.");
     return signInWithPopup(auth, new GoogleAuthProvider());
