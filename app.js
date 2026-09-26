@@ -33,6 +33,7 @@ const state = {
   selected: null,
   mode: "browse",
   busy: false,
+  clipboard: null,
   map: { zoom: 1, panX: 20, panY: 20, initializedYear: null },
 };
 let ensuringInitialYear = false;
@@ -179,7 +180,7 @@ function renderGarden() {
     </div>
     <div class="garden-body">
       <div class="map-viewport" aria-label="Garden plan">
-        <div class="garden-world ${readOnly ? "readonly" : ""} ${state.mode !== "layout" ? "beds-inert" : ""}" style="width:${settings.widthIn * PX_PER_INCH}px;height:${settings.heightIn * PX_PER_INCH}px;background-size:${settings.gridIn * PX_PER_INCH}px ${settings.gridIn * PX_PER_INCH}px">
+        <div class="garden-world ${readOnly ? "readonly" : ""} ${state.mode !== "layout" ? "beds-inert" : ""} ${state.mode === "layout" ? "layout-mode" : ""}" style="width:${settings.widthIn * PX_PER_INCH}px;height:${settings.heightIn * PX_PER_INCH}px;background-size:${settings.gridIn * PX_PER_INCH}px ${settings.gridIn * PX_PER_INCH}px">
           ${beds.map((bed) => renderBed(bed)).join("")}
           ${plants.map((plant) => renderPlantMarker(plant)).join("")}
         </div>
@@ -206,7 +207,7 @@ function renderBed(bed) {
   const showHandles = !yearIsReadOnly() && state.mode === "layout" && selected;
   return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${width}px;height:${height}px">
     <div class="bed ${state.mode === "layout" && selected ? "selected" : ""}" style="transform:rotate(${rotation}deg)"></div>
-    <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">[${bed.number}]</span>
+    <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">${bed.number}</span>
     ${showHandles ? resizeHandles("bed", bed.id) : ""}
   </div>`;
 }
@@ -628,12 +629,18 @@ function bindMap() {
         if (kind === "bed") await window.SproutStore.saveBed(patch);
         else await window.SproutStore.savePlant(patch);
       } catch (error) { toast(error.message || "Could not resize that.", "error"); render(); }
-    } else if (interaction && interaction.type !== "pan" && !interaction.type.startsWith("resize-") && interaction.moved) {
-      const item = findItem(interaction.type, interaction.id);
-      try {
-        if (interaction.type === "bed") await window.SproutStore.saveBed({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
-        else await window.SproutStore.savePlant({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
-      } catch (error) { toast(error.message || "Could not save that position.", "error"); render(); }
+    } else if (interaction && (interaction.type === "bed" || interaction.type === "plant")) {
+      if (interaction.moved) {
+        const item = findItem(interaction.type, interaction.id);
+        try {
+          if (interaction.type === "bed") await window.SproutStore.saveBed({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
+          else await window.SproutStore.savePlant({ ...item, x: interaction.nextX ?? item.x, y: interaction.nextY ?? item.y });
+        } catch (error) { toast(error.message || "Could not save that position.", "error"); render(); }
+      } else {
+        render();
+      }
+    } else if (interaction?.type.startsWith("resize-") && !interaction.moved) {
+      render();
     } else if (interaction?.type === "pan" && !interaction.moved) {
       state.selected = interaction.selectTarget || null; render();
     }
@@ -859,8 +866,51 @@ document.addEventListener("submit", async (event) => {
   } catch (error) { toast(error.message || "Could not save garden size.", "error"); }
 });
 
+function copySelected() {
+  if (state.tab !== "garden" || state.modal || yearIsReadOnly()) return;
+  if (state.mode === "layout" && state.selected?.type === "bed") {
+    const bed = state.data.beds.find((item) => item.id === state.selected.id);
+    if (bed) { state.clipboard = { type: "bed", data: bed }; toast(`Bed ${bed.number} copied.`); }
+  } else if (state.mode === "plants" && state.selected?.type === "plant") {
+    const plant = state.data.plants.find((item) => item.id === state.selected.id);
+    if (plant) { state.clipboard = { type: "plant", data: plant }; toast("Plant copied."); }
+  }
+}
+
+async function pasteClipboard() {
+  if (state.tab !== "garden" || state.modal || yearIsReadOnly() || !state.clipboard) return;
+  const grid = state.data.settings.gridIn;
+  const source = state.clipboard.data;
+  const x = clamp(snap(source.x + grid * 2), 0, Math.max(0, state.data.settings.widthIn - source.widthIn));
+  const y = clamp(snap(source.y + grid * 2), 0, Math.max(0, state.data.settings.heightIn - source.heightIn));
+  if (state.clipboard.type === "bed" && state.mode === "layout") {
+    const used = new Set(bedsForYear().map((item) => item.number));
+    let number = Number(source.number) + 1;
+    while (used.has(number) && number <= 10) number++;
+    if (number > 10 || bedsForYear().length >= 10) { toast("No bed numbers available.", "error"); return; }
+    const saved = await window.SproutStore.saveBed({ year: state.year, number, widthIn: source.widthIn, heightIn: source.heightIn, rotation: source.rotation, notes: source.notes, x, y });
+    state.selected = { type: "bed", id: saved.id };
+    render();
+    toast(`Bed ${number} pasted.`);
+  } else if (state.clipboard.type === "plant" && state.mode === "plants") {
+    const saved = await window.SproutStore.savePlant({ year: state.year, seedId: source.seedId, widthIn: source.widthIn, heightIn: source.heightIn, status: source.status, notes: source.notes, x, y });
+    state.selected = { type: "plant", id: saved.id };
+    render();
+    toast("Plant pasted.");
+  }
+}
+
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.modal) closeModal();
+  if (event.key === "Escape" && state.modal) { closeModal(); return; }
+  if (!(event.metaKey || event.ctrlKey)) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  const key = event.key.toLowerCase();
+  if (key === "c") { event.preventDefault(); copySelected(); }
+  if (key === "v") {
+    event.preventDefault();
+    pasteClipboard().catch((error) => toast(error?.message || "Could not paste.", "error"));
+  }
 });
 
 function exportBackup() {
