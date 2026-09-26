@@ -476,7 +476,7 @@ function verticalBarChart({ series, months, unit, max, labels, historical, yAxis
       const points = months.map((m, index) => {
         const v = m[h.key];
         if (v == null) return null;
-        const x = (index + 0.5) * (100 / months.length);
+        const x = months.length > 1 ? (index / (months.length - 1)) * 100 : 50;
         const y = 100 - Math.max(0, Math.min(100, (v / axisMax) * 100));
         return [x, y];
       }).filter(Boolean);
