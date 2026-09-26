@@ -148,7 +148,7 @@ function render() {
     return;
   }
   if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR);
-  const years = [...new Set([state.data.settings.activeYear, ...state.data.years.map((item) => item.year)])].filter(Boolean).sort((a, b) => b - a);
+  const years = [...new Set([state.data.settings.activeYear, ...state.data.years.map((item) => item.year), ...state.data.weather.map((item) => item.year)])].filter(Boolean).sort((a, b) => b - a);
   root.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
