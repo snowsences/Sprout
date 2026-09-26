@@ -425,31 +425,68 @@ function seedRatingStats(entries) {
     .filter((item) => item.seed).sort((a, b) => b.avg - a.avg);
 }
 
-function verticalBarChart({ series, months, unit, max, labels, historical }) {
+function niceCeil(value) {
+  if (!value || value <= 0) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const normalized = value / magnitude;
+  const niceNormalized = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return niceNormalized * magnitude;
+}
+
+function smoothPath(points) {
+  if (points.length < 2) return `M ${points[0]?.join(",") || "0,0"}`;
+  let d = `M ${points[0][0].toFixed(2)},${points[0][1].toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? i : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2[0].toFixed(2)},${p2[1].toFixed(2)}`;
+  }
+  return d;
+}
+
+function verticalBarChart({ series, months, unit, max, labels, historical, yAxis }) {
   const values = months.flatMap((m) => series.map((s) => m[s.key])).filter((v) => v != null);
   const histValues = historical ? months.flatMap((m) => historical.map((h) => m[h.key])).filter((v) => v != null) : [];
-  const scaleMax = max || Math.max(1, ...values, ...histValues);
+  const rawMax = max || Math.max(1, ...values, ...histValues);
+  const axisMax = yAxis ? niceCeil(rawMax) : rawMax;
   const legendItems = [
     ...(series.length > 1 ? series.map((s) => `<span class="legend-item"><span class="legend-swatch" style="background:${s.color}"></span>${s.label}</span>`) : []),
-    ...(historical ? historical.map((h) => `<span class="legend-item"><span class="legend-swatch legend-swatch-hist" style="border-color:${h.color}"></span>${h.label}</span>`) : []),
+    ...(historical ? historical.map((h) => `<span class="legend-item"><span class="legend-swatch legend-swatch-hist" style="background:${h.color}"></span>${h.label}</span>`) : []),
   ];
   const legend = legendItems.length ? `<div class="chart-legend">${legendItems.join("")}</div>` : "";
   const cols = months.map((m) => {
     const bars = series.map((s) => {
       const v = m[s.key];
-      const pct = v == null ? 0 : Math.max(2, Math.round((v / scaleMax) * 100));
+      const pct = v == null ? 0 : Math.max(2, Math.round((v / axisMax) * 100));
       const valueLabel = v == null ? "—" : `${v.toFixed(1)}${unit}`;
       return `<div class="chart-bar" style="height:${pct}%;background:${v == null ? "transparent" : s.color}" title="${monthLabel(m.month)} ${s.label}: ${valueLabel}">${labels && v != null ? `<span class="chart-bar-value">${v.toFixed(1)}</span>` : ""}</div>`;
     }).join("");
-    const histTicks = historical ? historical.map((h) => {
-      const v = m[h.key];
-      if (v == null) return "";
-      const pct = Math.max(0, Math.min(100, (v / scaleMax) * 100));
-      return `<div class="chart-hist-tick" style="bottom:${pct}%;border-color:${h.color}" title="${monthLabel(m.month)} ${h.label}: ${v.toFixed(1)}${unit}"></div>`;
-    }).join("") : "";
-    return `<div class="chart-col"><div class="chart-bars">${bars}${histTicks}</div><div class="chart-month-label">${monthLabel(m.month).slice(0, 3)}</div></div>`;
+    return `<div class="chart-col"><div class="chart-bars">${bars}</div></div>`;
   }).join("");
-  return `${legend}<div class="chart-frame">${cols}</div>`;
+  const labelCols = months.map((m) => `<div class="chart-col-label">${monthLabel(m.month).slice(0, 3)}</div>`).join("");
+  let overlaySvg = "";
+  if (historical) {
+    const paths = historical.map((h) => {
+      const points = months.map((m, index) => {
+        const v = m[h.key];
+        if (v == null) return null;
+        const x = (index + 0.5) * (100 / months.length);
+        const y = 100 - Math.max(0, Math.min(100, (v / axisMax) * 100));
+        return [x, y];
+      }).filter(Boolean);
+      if (points.length < 2) return "";
+      return `<path d="${smoothPath(points)}" fill="none" stroke="${h.color}" stroke-width="2" vector-effect="non-scaling-stroke" opacity="0.5"/>`;
+    }).join("");
+    overlaySvg = `<svg class="chart-hist-svg" viewBox="0 0 100 100" preserveAspectRatio="none">${paths}</svg>`;
+  }
+  const yAxisHtml = yAxis ? `<div class="chart-y-axis">${[4, 3, 2, 1, 0].map((i) => `<span>${Math.round((axisMax * i) / 4)}${unit}</span>`).join("")}</div>` : "";
+  return `${legend}<div class="chart-plot">${yAxisHtml}<div class="chart-frame-wrap"><div class="chart-frame">${cols}${overlaySvg}</div><div class="chart-labels-row">${labelCols}</div></div></div>`;
 }
 
 function statTile(label, value) {
@@ -467,7 +504,7 @@ function renderInsights(year) {
     const monthsMerged = stats.months.map((m, index) => ({ ...m, histHigh: hist.monthly[index]?.avgHigh, histLow: hist.monthly[index]?.avgLow, histPrecip: hist.monthly[index]?.avgPrecip }));
     const tempChart = verticalBarChart({
       series: [{ key: "avgHigh", label: "Avg High", color: "#2a78d6" }, { key: "avgLow", label: "Avg Low", color: "#eb6834" }],
-      months: monthsMerged, unit: "°F",
+      months: monthsMerged, unit: "°F", yAxis: true,
       historical: hasHistory ? [{ key: "histHigh", color: "#2a78d6", label: "Historical Avg High" }, { key: "histLow", color: "#eb6834", label: "Historical Avg Low" }] : null,
     });
     const rainChart = verticalBarChart({
@@ -683,6 +720,17 @@ async function ensureInitialYear() {
     try { await window.SproutStore.ensureYear(active); } catch (error) { toast(error.message || "Could not create the current year.", "error"); }
     finally { ensuringInitialYear = false; }
   }
+}
+
+let ensuringWeather = false;
+async function ensureWeatherFresh() {
+  if (!state.user || ensuringWeather) return;
+  const latestFetch = Math.max(0, ...state.data.weather.map((w) => w.fetchedAt || 0));
+  const stale = !state.data.weather.length || (Date.now() - latestFetch) > 20 * 60 * 60 * 1000;
+  if (!stale) return;
+  ensuringWeather = true;
+  try { await fetchWeatherHistory(); render(); } catch { /* silent: retried on next load */ }
+  finally { ensuringWeather = false; }
 }
 
 function firstBedPosition(widthIn, heightIn) {
@@ -1351,10 +1399,10 @@ function importBackup() {
   input.click();
 }
 
-window.addEventListener("sprout:auth", (event) => { state.user = event.detail; render(); if (state.user) ensureInitialYear(); });
-window.addEventListener("sprout:data", (event) => { state.data = event.detail; if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR); render(); if (state.user) ensureInitialYear(); });
+window.addEventListener("sprout:auth", (event) => { state.user = event.detail; render(); if (state.user) { ensureInitialYear(); ensureWeatherFresh(); } });
+window.addEventListener("sprout:data", (event) => { state.data = event.detail; if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR); render(); if (state.user) { ensureInitialYear(); ensureWeatherFresh(); } });
 window.addEventListener("sprout:error", (event) => toast(event.detail, "error"));
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 render();
-if (state.user) ensureInitialYear();
+if (state.user) { ensureInitialYear(); ensureWeatherFresh(); }
