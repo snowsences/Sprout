@@ -159,6 +159,7 @@ function render() {
           </select>
           ${yearIsReadOnly() ? '<span class="readonly-chip">Snapshot</span>' : '<span class="active-chip">Active year</span>'}
         </div>
+        ${state.tab === "garden" ? `<button class="topbar-add-plant" data-action="add-plant" ${yearIsReadOnly() || !state.data.seeds.length ? "disabled" : ""} aria-label="Add plant">${icon("plus")}</button>` : ""}
         <div class="sync-state"><span class="sync-dot"></span><span>${state.data.fromCache ? "Connecting…" : "Up to date"}</span></div>
       </header>
       <div class="banner-slot">${(() => { const banner = pendingMonthlyBanner(); return banner ? `<button class="month-banner" data-action="open-monthly-banner" data-year="${banner.year}" data-month="${banner.month}">It's time for the ${monthLabel(banner.month)} update</button>` : ""; })()}</div>
@@ -212,12 +213,12 @@ function renderGarden() {
     <div class="garden-tools">
       <div class="segmented" aria-label="Garden interaction mode">
         <button data-action="mode" data-mode="browse" class="${state.mode === "browse" ? "active" : ""}">Browse</button>
-        <button data-action="mode" data-mode="layout" class="${state.mode === "layout" ? "active" : ""}" ${readOnly ? "disabled" : ""}>Beds</button>
+        <button class="mode-beds-btn ${state.mode === "layout" ? "active" : ""}" data-action="mode" data-mode="layout" ${readOnly ? "disabled" : ""}>Beds</button>
         <button data-action="mode" data-mode="plants" class="${state.mode === "plants" ? "active" : ""}" ${readOnly ? "disabled" : ""}>Plants</button>
       </div>
       <span class="tool-divider"></span>
-      <button class="tool-button" data-action="add-bed" ${readOnly || beds.length >= 10 ? "disabled" : ""}>${icon("plus")}<span>Add bed</span></button>
-      <button class="tool-button primary" data-action="add-plant" ${readOnly || !seeds.length ? "disabled" : ""}>${icon("plus")}<span>Add plant</span></button>
+      <button class="tool-button add-bed-btn" data-action="add-bed" ${readOnly || beds.length >= 10 ? "disabled" : ""}>${icon("plus")}<span>Add bed</span></button>
+      <button class="tool-button primary add-plant-btn" data-action="add-plant" ${readOnly || !seeds.length ? "disabled" : ""}>${icon("plus")}<span>Add plant</span></button>
       ${readOnly ? `<button class="tool-button" data-action="duplicate-year">${icon("duplicate")}<span>Duplicate year</span></button>` : ""}
       <div class="zoom-group">
         <button class="icon-button" data-action="zoom-out" aria-label="Zoom out">${icon("minus")}</button>

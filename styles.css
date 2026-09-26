@@ -44,6 +44,8 @@ h1,h2,h3,strong{font-weight:500}
 .active-chip,.readonly-chip{font-size:13px;border-radius:999px;padding:6px 9px;background:var(--green-soft);color:var(--green-dark)}
 .readonly-chip{background:#e7e3d7;color:#6c675c}
 .sync-state{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:14px;min-width:170px;justify-content:flex-end}
+.topbar-add-plant{display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--green);color:#fff;flex:0 0 auto}
+.topbar-add-plant svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:#58a46b}
 .main{position:relative;min-height:0;overflow:hidden}
 .tab-page{height:100%;overflow:auto}
@@ -101,6 +103,7 @@ h1,h2,h3,strong{font-weight:500}
 .timeline-entry .text-button{padding:6px 0 0;font-size:13px}
 .year-tab{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;overflow:hidden;background:var(--paper)}
 .year-subtabs{margin:12px 20px 0}
+.year-subtabs button{flex:1}
 .year-tab-body{min-height:0;overflow:hidden;display:flex}
 .year-pane{display:none;width:100%;min-width:0;overflow-y:auto;padding:16px 20px}
 .year-pane.active{display:block}
@@ -188,6 +191,8 @@ h1,h2,h3,strong{font-weight:500}
 @media(max-width:720px){
   .app-shell{grid-template-rows:52px auto minmax(0,1fr) 68px}.topbar{padding:6px 12px}.brand{min-width:0}.brand img{width:34px;height:34px}.brand-name{display:none}.sync-state{min-width:0}.sync-state span:last-child{display:none}.topbar-center{justify-content:flex-start}.active-chip,.readonly-chip{display:none}
   .garden-tools{padding:8px}.segmented button{padding:8px 10px}.tool-button span{display:none}.tool-button{width:38px;padding:0}.zoom-group{margin-left:0}
+  .mode-beds-btn,.add-bed-btn,.add-plant-btn{display:none}
+  .topbar-add-plant{display:inline-flex}
   .content-page{padding:18px 14px 28px}.page-heading{align-items:flex-start;margin-bottom:16px}.page-heading h1{font-size:26px}.page-heading p{font-size:14px}.page-actions .primary-button{font-size:0;width:44px;padding:0}.page-actions .primary-button::after{content:"+";font-size:24px}
   .settings-grid{grid-template-columns:1fr}.settings-card.wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.filter-select{width:120px}.plant-row{grid-template-columns:48px minmax(0,1fr);padding:10px}.plant-avatar{width:44px;height:44px}.plant-row .status-pill{grid-column:2;justify-self:start}.activity-row{grid-template-columns:38px minmax(0,1fr)}.activity-time{grid-column:2}
   .modal-layer{align-items:flex-end;padding:0}.modal,.modal.large{width:100%;max-height:94dvh;border-radius:22px 22px 0 0}.modal-header{padding:15px 16px}.modal-body{padding:16px}.modal-actions{padding:12px 16px max(12px,env(safe-area-inset-bottom))}.fact-grid{grid-template-columns:repeat(2,1fr)}.photo-grid{grid-template-columns:repeat(3,1fr)}
