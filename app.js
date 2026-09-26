@@ -236,7 +236,7 @@ function renderBedModal(bed) {
   const height = splitInches(bed?.heightIn || 96);
   const body = `<form id="bed-form" class="form-grid"><input type="hidden" name="id" value="${bed?.id || ""}"><label class="field full"><span>Bed number</span><div class="choice-row">${[...Array(10)].map((_, index) => index + 1).map((value) => `<button type="button" class="choice ${value === number ? "selected" : ""}" data-field-choice="number" data-value="${value}" ${used.has(value) ? "disabled" : ""}>${value}</button>`).join("")}</div><input type="hidden" name="number" value="${number}"></label><label class="field"><span>Width</span>${dimensionInputs("bed-width", width)}</label><label class="field"><span>Length</span>${dimensionInputs("bed-height", height)}</label><label class="field full"><span>Rotation</span><div class="choice-row"><button type="button" class="choice ${!bed?.rotation ? "selected" : ""}" data-field-choice="rotation" data-value="0">0°</button><button type="button" class="choice ${Number(bed?.rotation) === 90 ? "selected" : ""}" data-field-choice="rotation" data-value="90">90°</button></div><input type="hidden" name="rotation" value="${bed?.rotation || 0}"></label><label class="field full"><span>Notes (optional)</span><textarea name="notes" maxlength="1000" placeholder="Anything useful about this bed…">${esc(bed?.notes || "")}</textarea></label></form>`;
   const deleteButton = bed ? '<button class="danger-button" data-action="delete-bed">Delete bed</button>' : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
-  return modalShell(bed ? `Edit Bed ${bed.number}` : "Add a Bed", body, `${deleteButton}<button class="primary-button" type="submit" form="bed-form">Save</button>`);
+  return modalShell(bed ? `Edit Bed ${bed.number}` : "Add a Bed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-bed">Save</button>`);
 }
 
 function renderPlantModal(plant) {
@@ -308,12 +308,19 @@ function firstBedPosition(widthIn, heightIn) {
 async function saveBed(form) {
   const values = new FormData(form);
   const existing = state.data.beds.find((item) => item.id === values.get("id"));
+  const number = Number(values.get("number"));
   const widthIn = snap(toInches(values.get("bed-width-ft"), values.get("bed-width-in")));
   const heightIn = snap(toInches(values.get("bed-height-ft"), values.get("bed-height-in")));
+  if (!Number.isInteger(number) || number < 1 || number > 10) throw new Error("Choose a bed number from 1 to 10.");
+  if (bedsForYear().some((bed) => bed.id !== existing?.id && bed.number === number)) throw new Error(`Bed ${number} already exists in this year.`);
   if (widthIn < 12 || heightIn < 12) throw new Error("Beds must be at least one foot in each direction.");
   const position = existing || firstBedPosition(widthIn, heightIn);
-  await window.SproutStore.saveBed({ ...existing, id: existing?.id, year: state.year, number: Number(values.get("number")), widthIn, heightIn, rotation: Number(values.get("rotation")), notes: values.get("notes"), x: position.x, y: position.y });
-  state.modal = null; state.mode = "layout"; render(); toast(existing ? "Bed updated." : "Bed added. Drag it into place in Beds mode.");
+  const saving = window.SproutStore.saveBed({ ...existing, id: existing?.id, year: state.year, number, widthIn, heightIn, rotation: Number(values.get("rotation")), notes: values.get("notes"), x: position.x, y: position.y });
+  state.modal = null;
+  state.mode = "layout";
+  render();
+  await saving;
+  toast(existing ? "Bed updated." : "Bed added. Drag it into place in Beds mode.");
 }
 
 async function savePlant(form) {
@@ -566,6 +573,17 @@ document.addEventListener("click", async (event) => {
     if (action === "fit-map") $(".map-viewport")?._gardenFit();
     if (action === "duplicate-year") openModal({ type: "duplicate" });
     if (action === "view-year") { state.year = Number(button.dataset.year); state.tab = "garden"; state.map.initializedYear = null; render(); }
+    if (action === "save-bed") {
+      const form = $("#bed-form");
+      if (!form) throw new Error("The bed editor could not be found. Close it and try again.");
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        throw new Error("Check the highlighted bed measurements and try again.");
+      }
+      button.disabled = true;
+      button.textContent = "Saving…";
+      await saveBed(form);
+    }
     if (action === "delete-bed") { const bed = state.data.beds.find((item) => item.id === state.modal.id); state.modal = { type: "confirm", title: `Delete Bed ${bed.number}?`, message: "This removes the bed and moves its plants into the archive so their journals are preserved.", confirmLabel: "Delete bed", run: async () => { await window.SproutStore.deleteBed(bed); state.selected = null; } }; render(); }
     if (action === "archive-plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); await window.SproutStore.archivePlant(plant, !plant.archived); state.modal = null; state.selected = null; render(); toast(plant.archived ? "Plant restored." : "Plant moved to the archive."); }
     if (action === "delete-log") { const log = state.data.logs.find((item) => item.id === button.dataset.id); if (confirm("Delete this journal entry?")) { await window.SproutStore.deleteLog(log); render(); } }
