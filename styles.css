@@ -125,6 +125,9 @@ h1,h2,h3,strong{font-weight:500}
 .cal-desc small{color:var(--muted);font-size:12.5px}
 .category-dates-list{display:grid;gap:16px}
 .category-date-row{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.month-day-fields{display:flex;gap:7px}
+.month-day-fields select:first-child{flex:1.4}
+.month-day-fields select:last-child{flex:1}
 .category-date-head{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:15px}
 .category-date-head span{font-size:20px}
 .checkbox-field{display:flex;flex-direction:row-reverse;align-items:center;justify-content:flex-end;gap:8px}

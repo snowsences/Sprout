@@ -592,14 +592,23 @@ function renderSeedDetails(seed) {
   return modalShell(seed.commonName, body, "", true);
 }
 
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function monthDayFields(fieldName, categoryId, mmdd) {
+  const [mm, dd] = (mmdd || "01-01").split("-").map(Number);
+  const monthOptions = [...Array(12)].map((_, i) => i + 1).map((m) => `<option value="${m}" ${m === mm ? "selected" : ""}>${monthLabel(m)}</option>`).join("");
+  const dayOptions = [...Array(DAYS_IN_MONTH[mm - 1])].map((_, i) => i + 1).map((d) => `<option value="${d}" ${d === dd ? "selected" : ""}>${d}</option>`).join("");
+  return `<div class="month-day-fields"><select data-cat-field="${fieldName}-month" data-category="${categoryId}">${monthOptions}</select><select data-cat-field="${fieldName}-day" data-category="${categoryId}">${dayOptions}</select></div>`;
+}
+
 function renderCategoryDatesModal() {
   const rows = PLANT_CATEGORIES.map((category) => {
     const dates = state.data.categoryDates[category.id] || {};
     return `<div class="category-date-row" data-category-row="${category.id}">
       <div class="category-date-head"><span>${category.icon}</span><strong>${category.label}</strong></div>
-      <label class="field"><span>Plant Date</span><input type="date" data-cat-field="plantDate" data-category="${category.id}" value="2024-${dates.plantDate || "01-01"}"></label>
+      <label class="field"><span>Plant Date</span>${monthDayFields("plantDate", category.id, dates.plantDate)}</label>
       <label class="field checkbox-field"><input type="checkbox" data-cat-field="startIndoors" data-category="${category.id}" ${dates.startIndoors ? "checked" : ""}><span>Start Indoors</span></label>
-      <label class="field ${dates.startIndoors ? "" : "hidden"}" data-indoors-date="${category.id}"><span>Start Indoors Date</span><input type="date" data-cat-field="startIndoorsDate" data-category="${category.id}" value="2024-${dates.startIndoorsDate || "01-01"}"></label>
+      <label class="field ${dates.startIndoors ? "" : "hidden"}" data-indoors-date="${category.id}"><span>Start Indoors Date</span>${monthDayFields("startIndoorsDate", category.id, dates.startIndoorsDate)}</label>
     </div>`;
   }).join("");
   const body = `<form id="category-dates-form" class="category-dates-list">${rows}</form>`;
@@ -741,16 +750,20 @@ async function saveSeed(form) {
   toast(existing ? "Seed updated." : "Seed added.");
 }
 
+function monthDayValue(form, fieldName, categoryId) {
+  const month = form.querySelector(`[data-cat-field="${fieldName}-month"][data-category="${categoryId}"]`)?.value;
+  const day = form.querySelector(`[data-cat-field="${fieldName}-day"][data-category="${categoryId}"]`)?.value;
+  return month && day ? `${pad2(month)}-${pad2(day)}` : "";
+}
+
 async function saveCategoryDates(form) {
   const map = {};
   for (const category of PLANT_CATEGORIES) {
-    const plantInput = form.querySelector(`[data-cat-field="plantDate"][data-category="${category.id}"]`);
     const startIndoorsInput = form.querySelector(`[data-cat-field="startIndoors"][data-category="${category.id}"]`);
-    const startIndoorsDateInput = form.querySelector(`[data-cat-field="startIndoorsDate"][data-category="${category.id}"]`);
     map[category.id] = {
-      plantDate: (plantInput?.value || "").slice(5) || "",
+      plantDate: monthDayValue(form, "plantDate", category.id),
       startIndoors: Boolean(startIndoorsInput?.checked),
-      startIndoorsDate: (startIndoorsDateInput?.value || "").slice(5) || "",
+      startIndoorsDate: monthDayValue(form, "startIndoorsDate", category.id),
     };
   }
   await window.SproutStore.saveCategoryDates(map);
@@ -1208,6 +1221,17 @@ document.addEventListener("change", async (event) => {
   if (event.target.matches('[data-cat-field="startIndoors"]')) {
     const field = $(`[data-indoors-date="${event.target.dataset.category}"]`);
     field?.classList.toggle("hidden", !event.target.checked);
+  }
+  if (event.target.matches('select[data-cat-field$="-month"]')) {
+    const category = event.target.dataset.category;
+    const fieldName = event.target.dataset.catField.replace(/-month$/, "");
+    const daySelect = $(`[data-cat-field="${fieldName}-day"][data-category="${category}"]`);
+    if (daySelect) {
+      const month = Number(event.target.value);
+      const max = DAYS_IN_MONTH[month - 1];
+      const current = Math.min(Number(daySelect.value) || 1, max);
+      daySelect.innerHTML = [...Array(max)].map((_, i) => i + 1).map((d) => `<option value="${d}" ${d === current ? "selected" : ""}>${d}</option>`).join("");
+    }
   }
 });
 
