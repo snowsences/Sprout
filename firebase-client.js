@@ -26,6 +26,7 @@ let db = null;
 let stops = [];
 let data = {
   settings: { widthIn: 360, heightIn: 240, gridIn: 6, activeYear: new Date().getFullYear() },
+  categoryDates: {},
   years: [],
   beds: [],
   seeds: [],
@@ -123,7 +124,8 @@ function subscribe(key, fallback) {
     (snapshot) => {
       if (key === "settings") {
         const shared = snapshot.docs.find((entry) => entry.id === "garden")?.data();
-        data = { ...data, settings: { ...fallback, ...(shared || {}) }, fromCache: snapshot.metadata.fromCache };
+        const categoryDates = snapshot.docs.find((entry) => entry.id === "categoryDates")?.data();
+        data = { ...data, settings: { ...fallback, ...(shared || {}) }, categoryDates: categoryDates || {}, fromCache: snapshot.metadata.fromCache };
       } else {
         data = {
           ...data,
@@ -200,6 +202,21 @@ window.SproutStore = {
     try { await batch.commit(); } catch (error) { data = { ...data, settings: previous }; emit(); throw error; }
   },
 
+  saveCategoryDates: async (map) => {
+    requireUser();
+    const previous = data.categoryDates;
+    const next = { ...map };
+    data = { ...data, categoryDates: next };
+    emit();
+    const batch = writeBatch(db);
+    batch.set(doc(refs.settings, "categoryDates"), next);
+    const entry = activityEntry("updated category planting dates", null, {
+      undo: { operations: [{ key: "settings", kind: "set", item: { ...previous, id: "categoryDates" } }] },
+    });
+    batch.set(doc(refs.activity, entry.id), entry);
+    try { await batch.commit(); } catch (error) { data = { ...data, categoryDates: previous }; emit(); throw error; }
+  },
+
   ensureYear: async (year) => {
     const numeric = Number(year);
     if (data.years.some((entry) => Number(entry.year) === numeric)) return;
@@ -244,7 +261,6 @@ window.SproutStore = {
       sun: input.sun || "medium",
       water: input.water || "medium",
       notes: input.notes || "",
-      plantedDate: input.plantedDate || "",
       seedLink: input.seedLink || "",
       updatedAt: now(),
       createdAt: existing?.createdAt || now(),
@@ -397,6 +413,7 @@ window.SproutStore = {
       }
     }
     if (payload.settings) operations.push({ key: "settings", item: { ...payload.settings, id: "garden" } });
+    if (payload.categoryDates) operations.push({ key: "settings", item: { ...payload.categoryDates, id: "categoryDates" } });
     for (let index = 0; index < operations.length; index += 400) {
       await commitMany(operations.slice(index, index + 400));
     }

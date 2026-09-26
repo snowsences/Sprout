@@ -28,6 +28,7 @@ const state = {
   tab: "garden",
   year: null,
   seedCategory: "all",
+  yearSubTab: "calendar",
   search: "",
   modal: null,
   selected: null,
@@ -62,6 +63,8 @@ const categoryForSeed = (seed = {}) => {
 const iconForSeed = (seed) => categoryById(categoryForSeed(seed))?.icon || "🥬";
 const yearRecord = (year) => state.data.years.find((item) => Number(item.year) === Number(year));
 const yearUpdatesForYear = (year) => state.data.yearUpdates.filter((entry) => Number(entry.year) === Number(year)).sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt - a.createdAt);
+const categoryDatesFor = (categoryId) => state.data.categoryDates[categoryId] || {};
+const monthDayLabel = (mmdd) => mmdd ? new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" }).format(new Date(`2024-${mmdd}T12:00:00`)) : "Not set";
 
 function icon(name) {
   const paths = {
@@ -80,6 +83,7 @@ function icon(name) {
     upload: '<path d="M12 16V4m-5 5 5-5 5 5M4 20h16"/>',
     download: '<path d="M12 4v12m-5-5 5 5 5-5M4 20h16"/>',
     duplicate: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.garden}</svg>`;
 }
@@ -120,6 +124,7 @@ function render() {
       <main class="main">${renderPage()}</main>
       <nav class="bottom-nav" aria-label="Main navigation">
         ${navButton("garden", "Garden", "garden")}
+        ${navButton("year", String(state.year), "calendar")}
         ${navButton("seeds", "Seeds", "seeds")}
         ${navButton("activity", "Activity", "activity")}
         ${navButton("settings", "Settings", "settings")}
@@ -148,6 +153,7 @@ function navButton(tab, label, iconName) {
 
 function renderPage() {
   if (state.tab === "garden") return renderGarden();
+  if (state.tab === "year") return renderYearTab();
   if (state.tab === "seeds") return renderSeeds();
   if (state.tab === "activity") return renderActivity();
   return renderSettings();
@@ -187,7 +193,6 @@ function renderGarden() {
         ${!beds.length && !plants.length ? `<div class="map-empty"><h2>${readOnly ? "No beds in this snapshot" : "Start planning your garden"}</h2><p>${readOnly ? "This year does not contain a saved layout." : "Add a numbered bed for visual context, or add seeds and place plants anywhere on the grid."}</p>${readOnly ? "" : '<button class="primary-button" data-action="add-bed">Add first bed</button>'}</div>` : ""}
         ${selectedPlant ? renderSelectionPlant(selectedPlant) : selectedBed ? renderSelectionBed(selectedBed) : ""}
       </div>
-      ${renderYearCard()}
     </div>
   </section>`;
 }
@@ -247,16 +252,65 @@ function renderYearCard() {
   </aside>`;
 }
 
+function renderYearTab() {
+  const year = state.year;
+  return `<section class="tab-page year-tab">
+    <div class="year-subtabs segmented" role="tablist" aria-label="Year view">
+      <button data-action="year-subtab" data-subtab="calendar" class="${state.yearSubTab === "calendar" ? "active" : ""}">Calendar</button>
+      <button data-action="year-subtab" data-subtab="updates" class="${state.yearSubTab === "updates" ? "active" : ""}">Updates</button>
+    </div>
+    <div class="year-tab-body">
+      <div class="year-pane ${state.yearSubTab === "calendar" ? "active" : ""}">${renderCalendar(year)}</div>
+      <div class="year-pane ${state.yearSubTab === "updates" ? "active" : ""}">${renderYearCard()}</div>
+    </div>
+  </section>`;
+}
+
+function categoryEventsForYear(year) {
+  const groups = new Map();
+  const add = (mmdd, eventType, categoryId, seedName) => {
+    if (!mmdd) return;
+    const key = `${mmdd}|${eventType}|${categoryId}`;
+    if (!groups.has(key)) groups.set(key, { mmdd, eventType, categoryId, names: new Set() });
+    groups.get(key).names.add(seedName || "Plant");
+  };
+  const plants = state.data.plants.filter((plant) => Number(plant.year) === Number(year) && !plant.archived);
+  for (const plant of plants) {
+    const seed = seedFor(plant);
+    const categoryId = categoryForSeed(seed);
+    const dates = categoryDatesFor(categoryId);
+    add(dates.plantDate, "plant", categoryId, seed.commonName);
+    if (dates.startIndoors) add(dates.startIndoorsDate, "indoors", categoryId, seed.commonName);
+  }
+  return [...groups.values()].sort((a, b) => a.mmdd.localeCompare(b.mmdd));
+}
+
+function renderCalendar(year) {
+  const events = categoryEventsForYear(year);
+  if (!events.length) return `<div class="empty-state">No planting dates yet. Set Plant Dates for your categories from the gear icon on the Seeds tab.</div>`;
+  let lastMonth = "";
+  const rows = events.map((event) => {
+    const date = new Date(`${year}-${event.mmdd}T12:00:00`);
+    const monthLabel = new Intl.DateTimeFormat(undefined, { month: "long" }).format(date);
+    const dayLabel = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(date);
+    const category = categoryById(event.categoryId);
+    const header = monthLabel !== lastMonth ? `<h3 class="cal-month">${monthLabel}</h3>` : "";
+    lastMonth = monthLabel;
+    return `${header}<article class="cal-row"><div class="cal-date">${dayLabel}</div><div class="cal-icon">${category?.icon || "🌱"}</div><div class="cal-desc"><strong>${event.eventType === "plant" ? "Plant Date" : "Start Indoors"}: ${esc(category?.label || "Other")}</strong><small>${esc([...event.names].join(", "))}</small></div></article>`;
+  }).join("");
+  return `<div class="calendar-list">${rows}</div>`;
+}
+
 function renderSeeds() {
   const query = state.search.trim().toLowerCase();
   const seeds = [...state.data.seeds]
     .filter((seed) => state.seedCategory === "all" || categoryForSeed(seed) === state.seedCategory)
     .filter((seed) => !query || seed.commonName.toLowerCase().includes(query) || seed.notes?.toLowerCase().includes(query))
     .sort((a, b) => a.commonName.localeCompare(b.commonName));
-  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1><p>${seeds.length} shown</p></div><div class="page-actions"><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
+  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1><p>${seeds.length} shown</p></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search seeds" value="${esc(state.search)}"></label></div>
     <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
-    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${esc(iconForSeed(seed))}</span><span class="plant-main"><h3>${esc(seed.commonName)}</h3><p>${title(categoryForSeed(seed))}${seed.plantedDate ? ` · ${shortDate(seed.plantedDate)}` : ""}</p></span><span class="status-pill">${activeCount} planted</span></button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
+    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const dates = categoryDatesFor(categoryForSeed(seed)); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${esc(iconForSeed(seed))}</span><span class="plant-main"><h3>${esc(seed.commonName)}</h3><p>${title(categoryForSeed(seed))}${dates.plantDate ? ` · ${monthDayLabel(dates.plantDate)}` : ""}</p></span><span class="status-pill">${activeCount} planted</span></button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
   </section>`;
 }
 
@@ -290,6 +344,7 @@ function renderModal() {
   if (state.modal.type === "log") return renderLogModal(state.data.plants.find((item) => item.id === state.modal.id));
   if (state.modal.type === "seed") return renderSeedModal(state.modal.id ? seedById(state.modal.id) : null);
   if (state.modal.type === "seedDetails") return renderSeedDetails(seedById(state.modal.id));
+  if (state.modal.type === "categoryDates") return renderCategoryDatesModal();
   if (state.modal.type === "duplicate") return renderDuplicateModal();
   if (state.modal.type === "confirm") return renderConfirmModal();
   return "";
@@ -328,7 +383,7 @@ function renderSeedModal(seed) {
   const selectedColor = initial.color || COLORS[0];
   const sun = initial.sun || "medium";
   const water = initial.water || "medium";
-  const body = `<form id="seed-form" class="form-grid"><input type="hidden" name="id" value="${seed?.id || ""}"><label class="field full"><span>Common name</span><input id="seed-name" name="commonName" value="${esc(commonName)}" maxlength="80" autocomplete="off" required></label><label class="field full"><span>Category</span><div class="choice-row plant-category-choices">${PLANT_CATEGORIES.map((category) => `<button type="button" class="choice plant-category-choice ${category.id === selectedCategory ? "selected" : ""}" data-field-choice="category" data-value="${category.id}" data-icon="${category.icon}"><span>${category.icon}</span><small>${category.label}</small></button>`).join("")}</div><input type="hidden" name="category" value="${selectedCategory}"><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field"><span>Planting date</span><input name="plantedDate" type="date" value="${esc(initial.plantedDate || "")}"></label><label class="field"><span>Seed link</span><input name="seedLink" type="url" placeholder="https://…" value="${esc(initial.seedLink || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
+  const body = `<form id="seed-form" class="form-grid"><input type="hidden" name="id" value="${seed?.id || ""}"><label class="field full"><span>Common name</span><input id="seed-name" name="commonName" value="${esc(commonName)}" maxlength="80" autocomplete="off" required></label><label class="field full"><span>Category</span><div class="choice-row plant-category-choices">${PLANT_CATEGORIES.map((category) => `<button type="button" class="choice plant-category-choice ${category.id === selectedCategory ? "selected" : ""}" data-field-choice="category" data-value="${category.id}" data-icon="${category.icon}"><span>${category.icon}</span><small>${category.label}</small></button>`).join("")}</div><input type="hidden" name="category" value="${selectedCategory}"><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field full"><span>Seed link</span><input name="seedLink" type="url" placeholder="https://…" value="${esc(initial.seedLink || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
   const deleteButton = seed ? '<button class="danger-button" data-action="delete-seed" data-id="'+seed.id+'">Delete seed</button>' : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
   return modalShell(seed ? `Edit ${seed.commonName}` : "Add a Seed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-seed">Save</button>`, true);
 }
@@ -336,8 +391,24 @@ function renderSeedModal(seed) {
 function renderSeedDetails(seed) {
   if (!seed) return "";
   const plants = plantsForSeedThisYear(seed.id);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${esc(iconForSeed(seed))}</div><div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryForSeed(seed))}</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Planting date</span><strong>${shortDate(seed.plantedDate)}</strong></div><div class="fact"><span>Sun</span><strong>${seed.sun === "low" ? "☁️" : seed.sun === "high" ? "☀️" : "⛅"} ${seed.sun}</strong></div><div class="fact"><span>Water</span><strong>${seed.water === "low" ? "💧" : seed.water === "high" ? "💧💧💧" : "💧💧"} ${seed.water}</strong></div><div class="fact"><span>Seed link</span><strong>${seed.seedLink ? `<a href="${esc(seed.seedLink)}" target="_blank" rel="noopener noreferrer">${icon("link")} Buy</a>` : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${esc(iconForSeed(seed))}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
+  const categoryId = categoryForSeed(seed);
+  const dates = categoryDatesFor(categoryId);
+  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${esc(iconForSeed(seed))}</div><div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryId)}</p></div><div class="detail-actions"><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Plant date</span><strong>${monthDayLabel(dates.plantDate)}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>${monthDayLabel(dates.startIndoorsDate)}</strong></div>` : ""}<div class="fact"><span>Sun</span><strong>${seed.sun === "low" ? "☁️" : seed.sun === "high" ? "☀️" : "⛅"} ${seed.sun}</strong></div><div class="fact"><span>Water</span><strong>${seed.water === "low" ? "💧" : seed.water === "high" ? "💧💧💧" : "💧💧"} ${seed.water}</strong></div><div class="fact"><span>Seed link</span><strong>${seed.seedLink ? `<a href="${esc(seed.seedLink)}" target="_blank" rel="noopener noreferrer">${icon("link")} Buy</a>` : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${esc(iconForSeed(seed))}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
   return modalShell(seed.commonName, body, "", true);
+}
+
+function renderCategoryDatesModal() {
+  const rows = PLANT_CATEGORIES.map((category) => {
+    const dates = state.data.categoryDates[category.id] || {};
+    return `<div class="category-date-row" data-category-row="${category.id}">
+      <div class="category-date-head"><span>${category.icon}</span><strong>${category.label}</strong></div>
+      <label class="field"><span>Plant Date</span><input type="date" data-cat-field="plantDate" data-category="${category.id}" value="2024-${dates.plantDate || "01-01"}"></label>
+      <label class="field checkbox-field"><input type="checkbox" data-cat-field="startIndoors" data-category="${category.id}" ${dates.startIndoors ? "checked" : ""}><span>Start Indoors</span></label>
+      <label class="field ${dates.startIndoors ? "" : "hidden"}" data-indoors-date="${category.id}"><span>Start Indoors Date</span><input type="date" data-cat-field="startIndoorsDate" data-category="${category.id}" value="2024-${dates.startIndoorsDate || "01-01"}"></label>
+    </div>`;
+  }).join("");
+  const body = `<form id="category-dates-form" class="category-dates-list">${rows}</form>`;
+  return modalShell("Category Planting Dates", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="button" data-action="save-category-dates">Save</button>', true);
 }
 
 function levelSelector(name, label, selected, lowIcon, mediumIcon, highIcon) {
@@ -347,8 +418,9 @@ function levelSelector(name, label, selected, lowIcon, mediumIcon, highIcon) {
 function renderPlantDetails(plant) {
   if (!plant) return "";
   const seed = seedFor(plant);
+  const dates = categoryDatesFor(categoryForSeed(seed));
   const logs = state.data.logs.filter((entry) => entry.plantId === plant.id).sort((a, b) => b.createdAt - a.createdAt);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${esc(iconForSeed(seed))}</div><div class="detail-title"><h2>${esc(seed.commonName || "Plant")}</h2><p>${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Planted</span><strong>${shortDate(seed.plantedDate)}</strong></div><div class="fact"><span>Sun</span><strong>${seed.sun === "low" ? "☁️" : seed.sun === "high" ? "☀️" : "⛅"} ${seed.sun}</strong></div><div class="fact"><span>Water</span><strong>${seed.water === "low" ? "💧" : seed.water === "high" ? "💧💧💧" : "💧💧"} ${seed.water}</strong></div></div><div class="section-head"><h3>Seed</h3><button class="text-button" data-action="seed-details" data-id="${seed.id}">View seed</button></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(seed.commonName || "Plant")} photo" loading="lazy">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
+  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${esc(iconForSeed(seed))}</div><div class="detail-title"><h2>${esc(seed.commonName || "Plant")}</h2><p>${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Plant date</span><strong>${dates.plantDate ? shortDate(`${plant.year}-${dates.plantDate}`) : "Not set"}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>${dates.startIndoorsDate ? shortDate(`${plant.year}-${dates.startIndoorsDate}`) : "Not set"}</strong></div>` : ""}<div class="fact"><span>Sun</span><strong>${seed.sun === "low" ? "☁️" : seed.sun === "high" ? "☀️" : "⛅"} ${seed.sun}</strong></div><div class="fact"><span>Water</span><strong>${seed.water === "low" ? "💧" : seed.water === "high" ? "💧💧💧" : "💧💧"} ${seed.water}</strong></div></div><div class="section-head"><h3>Seed</h3><button class="text-button" data-action="seed-details" data-id="${seed.id}">View seed</button></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(seed.commonName || "Plant")} photo" loading="lazy">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
   return modalShell(seed.commonName || "Plant", body, "", true);
 }
 
@@ -442,11 +514,28 @@ async function saveSeed(form) {
   const commonName = String(values.get("commonName") || "").trim();
   const category = categoryById(values.get("category"))?.id || "greens";
   const seedIcon = categoryById(category).icon;
-  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), sun: values.get("sun"), water: values.get("water"), plantedDate: values.get("plantedDate"), seedLink: values.get("seedLink"), notes: values.get("notes") };
+  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), sun: values.get("sun"), water: values.get("water"), seedLink: values.get("seedLink"), notes: values.get("notes") };
   const saved = await window.SproutStore.saveSeed(seed);
   state.modal = { type: "seedDetails", id: saved.id };
   render();
   toast(existing ? "Seed updated." : "Seed added.");
+}
+
+async function saveCategoryDates(form) {
+  const map = {};
+  for (const category of PLANT_CATEGORIES) {
+    const plantInput = form.querySelector(`[data-cat-field="plantDate"][data-category="${category.id}"]`);
+    const startIndoorsInput = form.querySelector(`[data-cat-field="startIndoors"][data-category="${category.id}"]`);
+    const startIndoorsDateInput = form.querySelector(`[data-cat-field="startIndoorsDate"][data-category="${category.id}"]`);
+    map[category.id] = {
+      plantDate: (plantInput?.value || "").slice(5) || "",
+      startIndoors: Boolean(startIndoorsInput?.checked),
+      startIndoorsDate: (startIndoorsDateInput?.value || "").slice(5) || "",
+    };
+  }
+  await window.SproutStore.saveCategoryDates(map);
+  closeModal();
+  toast("Category planting dates saved.");
 }
 
 async function saveYearUpdate(form) {
@@ -716,6 +805,7 @@ document.addEventListener("click", async (event) => {
     if (action === "sign-out") await window.SproutStore.signOut();
     if (action === "tab") { state.tab = button.dataset.tab; state.selected = null; state.modal = null; render(); }
     if (action === "seed-category") { state.seedCategory = button.dataset.category; render(); }
+    if (action === "year-subtab") { state.yearSubTab = button.dataset.subtab; render(); }
     if (action === "mode") { state.mode = button.dataset.mode; state.selected = null; render(); }
     if (action === "add-bed") openModal({ type: "bed" });
     if (action === "edit-bed") openModal({ type: "bed", id: button.dataset.id });
@@ -726,6 +816,7 @@ document.addEventListener("click", async (event) => {
     if (action === "add-seed") openModal({ type: "seed" });
     if (action === "edit-seed") openModal({ type: "seed", id: button.dataset.id });
     if (action === "seed-details") openModal({ type: "seedDetails", id: button.dataset.id });
+    if (action === "category-dates") openModal({ type: "categoryDates" });
     if (action === "close-modal" || (action === "modal-backdrop" && event.target === button)) closeModal();
     if (action === "clear-selection") { state.selected = null; render(); }
     if (action === "zoom-in") $(".map-viewport")?._gardenZoom(1.2);
@@ -777,6 +868,13 @@ document.addEventListener("click", async (event) => {
       button.textContent = "Saving…";
       await saveSeed(form);
     }
+    if (action === "save-category-dates") {
+      const form = $("#category-dates-form");
+      if (!form) throw new Error("The category date editor could not be found. Close it and try again.");
+      button.disabled = true;
+      button.textContent = "Saving…";
+      await saveCategoryDates(form);
+    }
     if (action === "save-duplicate") {
       const form = $("#duplicate-form");
       if (!form) throw new Error("The year editor could not be found. Close it and try again.");
@@ -817,6 +915,10 @@ document.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try { toast("Preparing photo…"); const photo = await uploadPhoto(file, `year-${year}`); await window.SproutStore.saveYearCover(year, photo); render(); toast("Cover photo updated."); } catch (error) { toast(error.message || "Photo upload failed.", "error"); }
+  }
+  if (event.target.matches('[data-cat-field="startIndoors"]')) {
+    const field = $(`[data-indoors-date="${event.target.dataset.category}"]`);
+    field?.classList.toggle("hidden", !event.target.checked);
   }
 });
 
