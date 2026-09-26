@@ -508,9 +508,9 @@ function renderInsights(year) {
     const hasHistory = state.data.weather.some((w) => Number(w.year) !== Number(year));
     const monthsMerged = stats.months.map((m, index) => ({ ...m, histHigh: hist.monthly[index]?.avgHigh, histLow: hist.monthly[index]?.avgLow, histPrecip: hist.monthly[index]?.avgPrecip, histSun: hist.monthly[index]?.avgSun }));
     const tempChart = verticalBarChart({
-      series: [{ key: "avgHigh", label: "Avg High", color: "#2a78d6" }, { key: "avgLow", label: "Avg Low", color: "#eb6834" }],
+      series: [{ key: "avgHigh", label: "Avg High", color: "#e34948" }, { key: "avgLow", label: "Avg Low", color: "#2a78d6" }],
       months: monthsMerged, unit: "°F", yAxis: true,
-      historical: hasHistory ? [{ key: "histHigh", color: "#2a78d6", label: "Historical Avg High" }, { key: "histLow", color: "#eb6834", label: "Historical Avg Low" }] : null,
+      historical: hasHistory ? [{ key: "histHigh", color: "#e34948", label: "Historical Avg High" }, { key: "histLow", color: "#2a78d6", label: "Historical Avg Low" }] : null,
     });
     const rainChart = verticalBarChart({
       series: [{ key: "precip", label: "Rainfall", color: "#1baf7a" }],
