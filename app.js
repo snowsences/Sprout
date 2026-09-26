@@ -165,9 +165,17 @@ function renderGarden() {
 }
 
 function renderBed(bed, plants) {
-  return `<div class="bed ${state.selected?.type === "bed" && state.selected.id === bed.id ? "selected" : ""}" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${bed.widthIn * PX_PER_INCH}px;height:${bed.heightIn * PX_PER_INCH}px;transform:rotate(${bed.rotation || 0}deg)">
-    <span class="bed-number">${bed.number}</span>
-    ${plants.map((plant) => `<div class="plant-marker ${state.selected?.type === "plant" && state.selected.id === plant.id ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(plant.color)};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(plant.icon)}</span><span class="plant-label">${esc(plant.commonName)}</span></div>`).join("")}
+  const width = bed.widthIn * PX_PER_INCH;
+  const height = bed.heightIn * PX_PER_INCH;
+  const rotation = Number(bed.rotation || 0);
+  const quarterTurn = Math.abs(rotation % 180) === 90;
+  const visualLeft = quarterTurn ? (width - height) / 2 : 0;
+  const visualTop = quarterTurn ? (height - width) / 2 : 0;
+  return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${width}px;height:${height}px">
+    <div class="bed ${state.selected?.type === "bed" && state.selected.id === bed.id ? "selected" : ""}" style="transform:rotate(${rotation}deg)">
+      ${plants.map((plant) => `<div class="plant-marker ${state.selected?.type === "plant" && state.selected.id === plant.id ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(plant.color)};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(plant.icon)}</span><span class="plant-label">${esc(plant.commonName)}</span></div>`).join("")}
+    </div>
+    <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">[${bed.number}]</span>
   </div>`;
 }
 
