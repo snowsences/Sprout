@@ -5,6 +5,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const root = $("#app");
 const CURRENT_YEAR = new Date().getFullYear();
+const GARDEN_LOCATION = { lat: 45.8236, lon: -122.7412 }; // approx. zip 98642
 const PX_PER_INCH = 4;
 const PLANT_CATEGORIES = [
   { id: "tomatoes", label: "Tomatoes", icon: "🍅" },
@@ -62,9 +63,48 @@ const categoryForSeed = (seed = {}) => {
 };
 const iconForSeed = (seed) => categoryById(categoryForSeed(seed))?.icon || "🥬";
 const yearRecord = (year) => state.data.years.find((item) => Number(item.year) === Number(year));
-const yearUpdatesForYear = (year) => state.data.yearUpdates.filter((entry) => Number(entry.year) === Number(year)).sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.createdAt - a.createdAt);
+const yearUpdateSortKey = (entry) => entry.type === "monthly" ? `${entry.year}-${pad2(entry.month)}-${pad2(new Date(entry.year, entry.month, 0).getDate())}` : entry.date || "";
+const yearUpdatesForYear = (year) => state.data.yearUpdates.filter((entry) => Number(entry.year) === Number(year)).sort((a, b) => yearUpdateSortKey(b).localeCompare(yearUpdateSortKey(a)) || b.createdAt - a.createdAt);
 const categoryDatesFor = (categoryId) => state.data.categoryDates[categoryId] || {};
 const monthDayLabel = (mmdd) => mmdd ? new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" }).format(new Date(`2024-${mmdd}T12:00:00`)) : "Not set";
+const monthLabel = (month) => new Intl.DateTimeFormat(undefined, { month: "long" }).format(new Date(2024, Number(month) - 1, 1));
+const pad2 = (value) => String(value).padStart(2, "0");
+const monthlyUpdateId = (year, month) => `${year}-${pad2(month)}-monthly`;
+const monthlyUpdateFor = (year, month) => state.data.yearUpdates.find((entry) => entry.id === monthlyUpdateId(year, month));
+
+function seedsForMonth(year, month) {
+  const monthStart = `${year}-${pad2(month)}-01`;
+  const lastDay = new Date(Number(year), Number(month), 0).getDate();
+  const monthEnd = `${year}-${pad2(month)}-${pad2(lastDay)}`;
+  const seedIds = new Set();
+  for (const plant of state.data.plants) {
+    if (Number(plant.year) !== Number(year)) continue;
+    if (plant.archived) {
+      if (!plant.removedAt || new Date(plant.removedAt).toISOString().slice(0, 10) < monthStart) continue;
+    }
+    const seed = seedFor(plant);
+    if (!seed.id) continue;
+    const dates = categoryDatesFor(categoryForSeed(seed));
+    if (dates.plantDate && `${year}-${dates.plantDate}` > monthEnd) continue;
+    seedIds.add(seed.id);
+  }
+  return [...seedIds].map((id) => seedById(id)).filter(Boolean).sort((a, b) => a.commonName.localeCompare(b.commonName));
+}
+
+function defaultMonthlyMonth(year) {
+  const now = new Date();
+  if (Number(year) === now.getFullYear()) return now.getMonth() === 0 ? 12 : now.getMonth();
+  return 12;
+}
+
+function pendingMonthlyBanner() {
+  const now = new Date();
+  let month = now.getMonth();
+  let year = now.getFullYear();
+  if (month === 0) { month = 12; year -= 1; } else { /* month already 1-indexed previous month */ }
+  if (!state.data.years.some((item) => Number(item.year) === year)) return null;
+  return monthlyUpdateFor(year, month) ? null : { year, month };
+}
 
 function icon(name) {
   const paths = {
@@ -121,6 +161,7 @@ function render() {
         </div>
         <div class="sync-state"><span class="sync-dot"></span><span>${state.data.fromCache ? "Connecting…" : "Up to date"}</span></div>
       </header>
+      <div class="banner-slot">${(() => { const banner = pendingMonthlyBanner(); return banner ? `<button class="month-banner" data-action="open-monthly-banner" data-year="${banner.year}" data-month="${banner.month}">It's time for the ${monthLabel(banner.month)} update</button>` : ""; })()}</div>
       <main class="main">${renderPage()}</main>
       <nav class="bottom-nav" aria-label="Main navigation">
         ${navButton("garden", "Garden", "garden")}
@@ -245,11 +286,24 @@ function renderYearCard() {
       ${readOnly ? "" : `<label class="text-button year-cover-upload">${record.coverPhoto ? "Change photo" : "Add cover photo"}<input class="hidden" type="file" accept="image/*" data-year-cover="${year}"></label>`}
     </div>
     <div class="year-card-body">
-      <h3>${year} Updates</h3>
+      <div class="section-head"><h3>${year} Updates</h3>${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}</div>
       ${readOnly ? "" : `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?" required></textarea><button class="primary-button full" type="submit">Add update</button></form>`}
-      <div class="year-timeline">${updates.length ? updates.map((entry) => `<article class="timeline-entry"><div class="timeline-date">${shortDate(entry.date)}</div><p>${esc(entry.text)}</p>${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
+      <div class="year-timeline">${updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
   </aside>`;
+}
+
+function renderUpdateEntry(entry, readOnly) {
+  if (entry.type === "monthly") {
+    const chips = (entry.ratings || []).map((r) => `<span class="rating-chip">${esc(seedById(r.seedId)?.commonName || "Plant")}: ${r.rating == null ? "N/A" : "★".repeat(r.rating)}</span>`).join("");
+    return `<article class="timeline-entry timeline-monthly">
+      <div class="timeline-date">${monthLabel(entry.month)} ${entry.year} <span class="timeline-badge">Monthly</span></div>
+      <div class="monthly-summary">${chips}</div>
+      ${entry.note ? `<p>${esc(entry.note)}</p>` : ""}
+      ${readOnly ? "" : `<button class="text-button" data-action="edit-monthly-update" data-id="${entry.id}">Edit</button> · <button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}
+    </article>`;
+  }
+  return `<article class="timeline-entry"><div class="timeline-date">${shortDate(entry.date)}</div><p>${esc(entry.text)}</p>${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`;
 }
 
 function renderYearTab() {
@@ -258,10 +312,12 @@ function renderYearTab() {
     <div class="year-subtabs segmented" role="tablist" aria-label="Year view">
       <button data-action="year-subtab" data-subtab="calendar" class="${state.yearSubTab === "calendar" ? "active" : ""}">Calendar</button>
       <button data-action="year-subtab" data-subtab="updates" class="${state.yearSubTab === "updates" ? "active" : ""}">Updates</button>
+      <button data-action="year-subtab" data-subtab="insights" class="${state.yearSubTab === "insights" ? "active" : ""}">Insights</button>
     </div>
     <div class="year-tab-body">
       <div class="year-pane ${state.yearSubTab === "calendar" ? "active" : ""}">${renderCalendar(year)}</div>
       <div class="year-pane ${state.yearSubTab === "updates" ? "active" : ""}">${renderYearCard()}</div>
+      <div class="year-pane ${state.yearSubTab === "insights" ? "active" : ""}">${renderInsights(year)}</div>
     </div>
   </section>`;
 }
@@ -299,6 +355,92 @@ function renderCalendar(year) {
     return `${header}<article class="cal-row"><div class="cal-date">${dayLabel}</div><div class="cal-icon">${category?.icon || "🌱"}</div><div class="cal-desc"><strong>${event.eventType === "plant" ? "Plant Date" : "Start Indoors"}: ${esc(category?.label || "Other")}</strong><small>${esc([...event.names].join(", "))}</small></div></article>`;
   }).join("");
   return `<div class="calendar-list">${rows}</div>`;
+}
+
+function monthlyWeatherStats(weather) {
+  const months = Array.from({ length: 12 }, () => ({ count: 0, highSum: 0, lowSum: 0, precipSum: 0 }));
+  let hot90 = 0, hot95 = 0, cold32 = 0;
+  for (const day of weather.days || []) {
+    const monthIndex = Number(day.date.slice(5, 7)) - 1;
+    if (!months[monthIndex]) continue;
+    if (day.tempHighF != null) { months[monthIndex].highSum += day.tempHighF; months[monthIndex].count++; if (day.tempHighF >= 90) hot90++; if (day.tempHighF >= 95) hot95++; }
+    if (day.tempLowF != null) { months[monthIndex].lowSum += day.tempLowF; if (day.tempLowF <= 32) cold32++; }
+    if (day.precipIn != null) months[monthIndex].precipSum += day.precipIn;
+  }
+  return {
+    months: months.map((m, index) => ({ month: index + 1, avgHigh: m.count ? m.highSum / m.count : null, avgLow: m.count ? m.lowSum / m.count : null, precip: m.count ? m.precipSum : null })),
+    hot90, hot95, cold32,
+  };
+}
+
+function monthlyRatingStats(entries) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    const entry = entries.find((item) => Number(item.month) === month);
+    const rated = (entry?.ratings || []).filter((r) => r.rating != null);
+    return { month, avg: rated.length ? rated.reduce((sum, r) => sum + r.rating, 0) / rated.length : null };
+  });
+}
+
+function seedRatingStats(entries) {
+  const bySeed = new Map();
+  for (const entry of entries) {
+    for (const r of entry.ratings || []) {
+      if (r.rating == null) continue;
+      if (!bySeed.has(r.seedId)) bySeed.set(r.seedId, { sum: 0, count: 0 });
+      const agg = bySeed.get(r.seedId);
+      agg.sum += r.rating; agg.count++;
+    }
+  }
+  return [...bySeed.entries()].map(([seedId, agg]) => ({ seed: seedById(seedId), avg: agg.sum / agg.count }))
+    .filter((item) => item.seed).sort((a, b) => b.avg - a.avg);
+}
+
+function verticalBarChart({ series, months, unit, max, labels }) {
+  const values = months.flatMap((m) => series.map((s) => m[s.key])).filter((v) => v != null);
+  const scaleMax = max || Math.max(1, ...values);
+  const legend = series.length > 1 ? `<div class="chart-legend">${series.map((s) => `<span class="legend-item"><span class="legend-swatch" style="background:${s.color}"></span>${s.label}</span>`).join("")}</div>` : "";
+  const cols = months.map((m) => {
+    const bars = series.map((s) => {
+      const v = m[s.key];
+      const pct = v == null ? 0 : Math.max(2, Math.round((v / scaleMax) * 100));
+      const valueLabel = v == null ? "—" : `${v.toFixed(1)}${unit}`;
+      return `<div class="chart-bar" style="height:${pct}%;background:${v == null ? "transparent" : s.color}" title="${monthLabel(m.month)} ${s.label}: ${valueLabel}">${labels && v != null ? `<span class="chart-bar-value">${v.toFixed(1)}</span>` : ""}</div>`;
+    }).join("");
+    return `<div class="chart-col"><div class="chart-bars">${bars}</div><div class="chart-month-label">${monthLabel(m.month).slice(0, 3)}</div></div>`;
+  }).join("");
+  return `${legend}<div class="chart-frame">${cols}</div>`;
+}
+
+function statTile(label, value) {
+  return `<div class="stat-tile"><strong>${value}</strong><span>${esc(label)}</span></div>`;
+}
+
+function renderInsights(year) {
+  const weather = state.data.weather.find((w) => Number(w.year) === Number(year));
+  const monthlyEntries = state.data.yearUpdates.filter((u) => u.type === "monthly" && Number(u.year) === Number(year));
+
+  const weatherBody = weather ? (() => {
+    const stats = monthlyWeatherStats(weather);
+    const tempChart = verticalBarChart({ series: [{ key: "avgHigh", label: "Avg High", color: "#2a78d6" }, { key: "avgLow", label: "Avg Low", color: "#eb6834" }], months: stats.months, unit: "°F" });
+    const rainChart = verticalBarChart({ series: [{ key: "precip", label: "Rainfall", color: "#1baf7a" }], months: stats.months, unit: "in", labels: true });
+    return `<div class="chart-card"><h4>Monthly Temperatures (avg high/low, °F)</h4>${tempChart}</div>
+      <div class="chart-card"><h4>Monthly Rainfall (in)</h4>${rainChart}</div>
+      <div class="stat-tiles">${statTile("Days ≥ 90°F", stats.hot90)}${statTile("Days ≥ 95°F", stats.hot95)}${statTile("Days ≤ 32°F", stats.cold32)}</div>`;
+  })() : `<div class="empty-state">No weather data yet for ${year}. Fetch historical highs, lows, and rainfall for zip 98642.</div>`;
+
+  const ratingBody = monthlyEntries.length ? (() => {
+    const monthly = monthlyRatingStats(monthlyEntries);
+    const bySeed = seedRatingStats(monthlyEntries);
+    const ratingChart = verticalBarChart({ series: [{ key: "avg", label: "Avg Rating", color: "#2a78d6" }], months: monthly, unit: "★", max: 5, labels: true });
+    const seedBars = bySeed.length ? `<div class="rank-list">${bySeed.map((item) => `<div class="rank-row"><span class="rank-label">${esc(item.seed.commonName)}</span><div class="rank-bar-track"><div class="rank-bar" style="width:${(item.avg / 5) * 100}%"></div></div><span class="rank-value">${item.avg.toFixed(1)}★</span></div>`).join("")}</div>` : '<div class="form-note">No rated seeds yet.</div>';
+    return `<div class="chart-card"><h4>Average Rating by Month</h4>${ratingChart}</div><div class="chart-card"><h4>Average Rating by Seed</h4>${seedBars}</div>`;
+  })() : `<div class="empty-state">No Monthly Updates logged yet for ${year}.</div>`;
+
+  return `<div class="insights-pane">
+    <div class="insights-section"><div class="section-head"><h3>Weather</h3><button class="text-button" data-action="fetch-weather" data-year="${year}">${weather ? "Refresh" : "Fetch"} weather data</button></div>${weatherBody}</div>
+    <div class="insights-section"><div class="section-head"><h3>Seed Ratings</h3></div>${ratingBody}</div>
+  </div>`;
 }
 
 function renderSeeds() {
@@ -345,6 +487,7 @@ function renderModal() {
   if (state.modal.type === "seed") return renderSeedModal(state.modal.id ? seedById(state.modal.id) : null);
   if (state.modal.type === "seedDetails") return renderSeedDetails(seedById(state.modal.id));
   if (state.modal.type === "categoryDates") return renderCategoryDatesModal();
+  if (state.modal.type === "monthlyUpdate") return renderMonthlyUpdateModal();
   if (state.modal.type === "duplicate") return renderDuplicateModal();
   if (state.modal.type === "confirm") return renderConfirmModal();
   return "";
@@ -409,6 +552,31 @@ function renderCategoryDatesModal() {
   }).join("");
   const body = `<form id="category-dates-form" class="category-dates-list">${rows}</form>`;
   return modalShell("Category Planting Dates", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="button" data-action="save-category-dates">Save</button>', true);
+}
+
+function ratingRow(seed, existing) {
+  const current = existing?.ratings?.find((entry) => entry.seedId === seed.id);
+  const value = current ? (current.rating == null ? "na" : String(current.rating)) : "";
+  return `<div class="rating-row">
+    <div class="rating-seed"><span>${esc(iconForSeed(seed))}</span><strong>${esc(seed.commonName)}</strong></div>
+    <div class="rating-stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rating-star ${value && value !== "na" && n <= Number(value) ? "selected" : ""}" data-rating-choice data-seed="${seed.id}" data-value="${n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}<button type="button" class="rating-na ${value === "na" ? "selected" : ""}" data-rating-choice data-seed="${seed.id}" data-value="na">N/A</button></div>
+    <input type="hidden" name="rating-${seed.id}" value="${value}">
+    <input class="rating-note" type="text" name="note-${seed.id}" placeholder="Notes (optional)" value="${esc(current?.notes || "")}" maxlength="300">
+  </div>`;
+}
+
+function renderMonthlyUpdateModal() {
+  const { year, month } = state.modal;
+  const existing = monthlyUpdateFor(year, month);
+  const seeds = seedsForMonth(year, month);
+  const monthOptions = [...Array(12)].map((_, index) => index + 1).map((m) => `<option value="${m}" ${m === month ? "selected" : ""}>${monthLabel(m)}</option>`).join("");
+  const body = `<form id="monthly-update-form" class="monthly-update-form">
+    <input type="hidden" name="year" value="${year}">
+    <label class="field full"><span>Month</span><select name="month" id="monthly-update-month">${monthOptions}</select></label>
+    ${seeds.length ? `<div class="rating-list">${seeds.map((seed) => ratingRow(seed, existing)).join("")}</div>` : '<div class="empty-state">No seeds were in the garden this month.</div>'}
+    <label class="field full"><span>Overall notes (optional)</span><textarea name="overallNote" maxlength="1000" placeholder="Anything else about ${monthLabel(month)}…">${esc(existing?.note || "")}</textarea></label>
+  </form>`;
+  return modalShell(`Monthly Update — ${monthLabel(month)} ${year}`, body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="button" data-action="save-monthly-update">Save</button>', true);
 }
 
 function levelSelector(name, label, selected, lowIcon, mediumIcon, highIcon) {
@@ -538,6 +706,40 @@ async function saveCategoryDates(form) {
   toast("Category planting dates saved.");
 }
 
+async function saveMonthlyUpdate(form) {
+  const values = new FormData(form);
+  const year = Number(values.get("year"));
+  const month = Number(values.get("month"));
+  const seeds = seedsForMonth(year, month);
+  const ratings = [];
+  for (const seed of seeds) {
+    const raw = values.get(`rating-${seed.id}`);
+    if (!raw) throw new Error(`Rate ${seed.commonName} (or mark N/A) before saving.`);
+    ratings.push({ seedId: seed.id, rating: raw === "na" ? null : Number(raw), notes: values.get(`note-${seed.id}`) || "" });
+  }
+  await window.SproutStore.saveMonthlyUpdate({ year, month, ratings, note: values.get("overallNote") });
+  closeModal();
+  toast(`${monthLabel(month)} update saved.`);
+}
+
+async function fetchWeatherYear(year) {
+  const now = new Date();
+  const isCurrentYear = Number(year) === now.getFullYear();
+  const start = `${year}-01-01`;
+  const end = isCurrentYear ? new Date(now.getTime() - 86400000).toISOString().slice(0, 10) : `${year}-12-31`;
+  const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${GARDEN_LOCATION.lat}&longitude=${GARDEN_LOCATION.lon}&start_date=${start}&end_date=${end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FLos_Angeles`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Could not fetch weather data.");
+  const json = await response.json();
+  const days = (json.daily?.time || []).map((date, index) => ({
+    date,
+    tempHighF: json.daily.temperature_2m_max[index],
+    tempLowF: json.daily.temperature_2m_min[index],
+    precipIn: json.daily.precipitation_sum[index],
+  }));
+  await window.SproutStore.saveWeatherYear(year, days);
+}
+
 async function saveYearUpdate(form) {
   const values = new FormData(form);
   await window.SproutStore.addYearUpdate({ year: Number(values.get("year")), date: values.get("date"), text: values.get("text") });
@@ -574,6 +776,19 @@ function applyFieldChoice(button) {
   button.classList.add("selected");
   field.value = button.dataset.value;
   if (name === "category" && button.dataset.icon && form.elements.icon) form.elements.icon.value = button.dataset.icon;
+}
+
+function applyRatingChoice(button) {
+  const form = button.closest("form");
+  const seedId = button.dataset.seed;
+  const value = button.dataset.value;
+  const field = form?.elements[`rating-${seedId}`];
+  if (!field) return;
+  field.value = value;
+  $$(`[data-rating-choice][data-seed="${seedId}"]`, form).forEach((el) => {
+    if (el.dataset.value === "na") { el.classList.toggle("selected", value === "na"); return; }
+    el.classList.toggle("selected", value !== "na" && Number(el.dataset.value) <= Number(value));
+  });
 }
 
 function bindMap() {
@@ -796,9 +1011,10 @@ async function uploadPhoto(file, plantId) {
 }
 
 document.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action],[data-field-choice]");
+  const button = event.target.closest("[data-action],[data-field-choice],[data-rating-choice]");
   if (!button) return;
   if (button.dataset.fieldChoice) { event.preventDefault(); applyFieldChoice(button); return; }
+  if (button.dataset.ratingChoice !== undefined) { event.preventDefault(); applyRatingChoice(button); return; }
   const action = button.dataset.action;
   try {
     if (action === "sign-in") await window.SproutStore.signIn();
@@ -817,6 +1033,17 @@ document.addEventListener("click", async (event) => {
     if (action === "edit-seed") openModal({ type: "seed", id: button.dataset.id });
     if (action === "seed-details") openModal({ type: "seedDetails", id: button.dataset.id });
     if (action === "category-dates") openModal({ type: "categoryDates" });
+    if (action === "log-monthly-update") openModal({ type: "monthlyUpdate", year: state.year, month: defaultMonthlyMonth(state.year) });
+    if (action === "edit-monthly-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); openModal({ type: "monthlyUpdate", year: entry.year, month: entry.month }); }
+    if (action === "open-monthly-banner") { state.year = Number(button.dataset.year); state.tab = "year"; state.yearSubTab = "updates"; openModal({ type: "monthlyUpdate", year: Number(button.dataset.year), month: Number(button.dataset.month) }); }
+    if (action === "fetch-weather") {
+      const year = button.dataset.year;
+      button.disabled = true;
+      button.textContent = "Fetching…";
+      await fetchWeatherYear(year);
+      render();
+      toast("Weather data updated.");
+    }
     if (action === "close-modal" || (action === "modal-backdrop" && event.target === button)) closeModal();
     if (action === "clear-selection") { state.selected = null; render(); }
     if (action === "zoom-in") $(".map-viewport")?._gardenZoom(1.2);
@@ -875,6 +1102,13 @@ document.addEventListener("click", async (event) => {
       button.textContent = "Saving…";
       await saveCategoryDates(form);
     }
+    if (action === "save-monthly-update") {
+      const form = $("#monthly-update-form");
+      if (!form) throw new Error("The monthly update editor could not be found. Close it and try again.");
+      button.disabled = true;
+      button.textContent = "Saving…";
+      await saveMonthlyUpdate(form);
+    }
     if (action === "save-duplicate") {
       const form = $("#duplicate-form");
       if (!form) throw new Error("The year editor could not be found. Close it and try again.");
@@ -904,6 +1138,7 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("change", async (event) => {
   if (event.target.matches('[data-action="change-year"]')) { state.year = Number(event.target.value); state.selected = null; state.map.initializedYear = null; if (yearIsReadOnly()) state.mode = "browse"; render(); }
+  if (event.target.id === "monthly-update-month") { state.modal.month = Number(event.target.value); render(); }
   if (event.target.matches("[data-photo-plant]")) {
     const plant = state.data.plants.find((item) => item.id === event.target.dataset.photoPlant);
     const file = event.target.files?.[0];

@@ -33,6 +33,7 @@ let data = {
   plants: [],
   logs: [],
   yearUpdates: [],
+  weather: [],
   activity: [],
   fromCache: false,
 };
@@ -147,7 +148,7 @@ if (configured) {
   });
   db = initializeFirestore(app, {});
   const base = ["sproutHouseholds", SPROUT_CONFIG.householdId];
-  for (const key of ["settings", "years", "beds", "seeds", "plants", "logs", "yearUpdates", "activity"]) {
+  for (const key of ["settings", "years", "beds", "seeds", "plants", "logs", "yearUpdates", "weather", "activity"]) {
     refs[key] = collection(db, ...base, key);
   }
 
@@ -392,6 +393,7 @@ window.SproutStore = {
   addYearUpdate: (input) => {
     const item = {
       id: id(),
+      type: "manual",
       year: Number(input.year),
       date: input.date || new Date().toISOString().slice(0, 10),
       text: String(input.text || "").trim(),
@@ -401,11 +403,42 @@ window.SproutStore = {
     return commitDocument("yearUpdates", item, { activity: "added year update", activityExtra: { subjectType: "year", year: input.year, label: `${input.year} update` } });
   },
 
+  saveMonthlyUpdate: (input) => {
+    const year = Number(input.year);
+    const month = Number(input.month);
+    const docId = `${year}-${String(month).padStart(2, "0")}-monthly`;
+    const existing = data.yearUpdates.find((entry) => entry.id === docId);
+    const item = {
+      id: docId,
+      type: "monthly",
+      year,
+      month,
+      ratings: input.ratings || [],
+      note: input.note || "",
+      createdAt: existing?.createdAt || now(),
+      updatedAt: now(),
+      ...actor(),
+    };
+    return commitDocument("yearUpdates", item, { activity: existing ? "updated monthly update" : "added monthly update", activityExtra: { subjectType: "year", year, label: `${year} monthly update` } });
+  },
+
   deleteYearUpdate: (entry) => commitDocument("yearUpdates", entry, { remove: true, activity: "deleted year update" }),
+
+  saveWeatherYear: async (year, days) => {
+    requireUser();
+    const item = { id: String(year), year: Number(year), days, fetchedAt: now(), ...actor() };
+    const previous = data.weather;
+    data = { ...data, weather: [...previous.filter((entry) => entry.id !== item.id), item] };
+    emit();
+    const batch = writeBatch(db);
+    batch.set(doc(refs.weather, item.id), item);
+    try { await batch.commit(); } catch (error) { data = { ...data, weather: previous }; emit(); throw error; }
+    return item;
+  },
 
   importBackup: async (payload) => {
     requireUser();
-    const collections = ["years", "beds", "seeds", "plants", "logs", "yearUpdates", "activity"];
+    const collections = ["years", "beds", "seeds", "plants", "logs", "yearUpdates", "weather", "activity"];
     const operations = [];
     for (const key of collections) {
       for (const item of Array.isArray(payload[key]) ? payload[key] : []) {
