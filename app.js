@@ -317,7 +317,7 @@ function renderYearTab() {
     </div>
     <div class="year-tab-body">
       <div class="year-pane ${state.yearSubTab === "calendar" ? "active" : ""}">${renderCalendar(year)}</div>
-      <div class="year-pane ${state.yearSubTab === "updates" ? "active" : ""}">${renderYearCard()}</div>
+      <div class="year-pane year-pane-updates ${state.yearSubTab === "updates" ? "active" : ""}">${renderYearCard()}</div>
       <div class="year-pane ${state.yearSubTab === "insights" ? "active" : ""}">${renderInsights(year)}</div>
     </div>
   </section>`;
@@ -374,6 +374,34 @@ function monthlyWeatherStats(weather) {
   };
 }
 
+function historicalWeatherStats() {
+  const byMonth = Array.from({ length: 12 }, () => ({ highs: [], lows: [], precipTotals: [] }));
+  for (const yearDoc of state.data.weather) {
+    const perMonth = Array.from({ length: 12 }, () => ({ highSum: 0, highCount: 0, lowSum: 0, lowCount: 0, precipSum: 0, any: false }));
+    for (const day of yearDoc.days || []) {
+      const monthIndex = Number(day.date.slice(5, 7)) - 1;
+      if (!perMonth[monthIndex]) continue;
+      const bucket = perMonth[monthIndex];
+      bucket.any = true;
+      if (day.tempHighF != null) { bucket.highSum += day.tempHighF; bucket.highCount++; }
+      if (day.tempLowF != null) { bucket.lowSum += day.tempLowF; bucket.lowCount++; }
+      if (day.precipIn != null) bucket.precipSum += day.precipIn;
+    }
+    perMonth.forEach((bucket, index) => {
+      if (!bucket.any) return;
+      if (bucket.highCount) byMonth[index].highs.push(bucket.highSum / bucket.highCount);
+      if (bucket.lowCount) byMonth[index].lows.push(bucket.lowSum / bucket.lowCount);
+      byMonth[index].precipTotals.push(bucket.precipSum);
+    });
+  }
+  const avg = (values) => values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
+  const monthly = byMonth.map((bucket, index) => ({ month: index + 1, avgHigh: avg(bucket.highs), avgLow: avg(bucket.lows), avgPrecip: avg(bucket.precipTotals) }));
+  const overallHigh = avg(monthly.map((m) => m.avgHigh).filter((v) => v != null));
+  const overallLow = avg(monthly.map((m) => m.avgLow).filter((v) => v != null));
+  const overallPrecip = monthly.reduce((sum, m) => sum + (m.avgPrecip || 0), 0);
+  return { monthly, overallHigh, overallLow, overallPrecip, yearsCount: state.data.weather.length };
+}
+
 function monthlyRatingStats(entries) {
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
@@ -397,10 +425,15 @@ function seedRatingStats(entries) {
     .filter((item) => item.seed).sort((a, b) => b.avg - a.avg);
 }
 
-function verticalBarChart({ series, months, unit, max, labels }) {
+function verticalBarChart({ series, months, unit, max, labels, historical }) {
   const values = months.flatMap((m) => series.map((s) => m[s.key])).filter((v) => v != null);
-  const scaleMax = max || Math.max(1, ...values);
-  const legend = series.length > 1 ? `<div class="chart-legend">${series.map((s) => `<span class="legend-item"><span class="legend-swatch" style="background:${s.color}"></span>${s.label}</span>`).join("")}</div>` : "";
+  const histValues = historical ? months.flatMap((m) => historical.map((h) => m[h.key])).filter((v) => v != null) : [];
+  const scaleMax = max || Math.max(1, ...values, ...histValues);
+  const legendItems = [
+    ...(series.length > 1 ? series.map((s) => `<span class="legend-item"><span class="legend-swatch" style="background:${s.color}"></span>${s.label}</span>`) : []),
+    ...(historical ? historical.map((h) => `<span class="legend-item"><span class="legend-swatch legend-swatch-hist" style="border-color:${h.color}"></span>${h.label}</span>`) : []),
+  ];
+  const legend = legendItems.length ? `<div class="chart-legend">${legendItems.join("")}</div>` : "";
   const cols = months.map((m) => {
     const bars = series.map((s) => {
       const v = m[s.key];
@@ -408,7 +441,13 @@ function verticalBarChart({ series, months, unit, max, labels }) {
       const valueLabel = v == null ? "—" : `${v.toFixed(1)}${unit}`;
       return `<div class="chart-bar" style="height:${pct}%;background:${v == null ? "transparent" : s.color}" title="${monthLabel(m.month)} ${s.label}: ${valueLabel}">${labels && v != null ? `<span class="chart-bar-value">${v.toFixed(1)}</span>` : ""}</div>`;
     }).join("");
-    return `<div class="chart-col"><div class="chart-bars">${bars}</div><div class="chart-month-label">${monthLabel(m.month).slice(0, 3)}</div></div>`;
+    const histTicks = historical ? historical.map((h) => {
+      const v = m[h.key];
+      if (v == null) return "";
+      const pct = Math.max(0, Math.min(100, (v / scaleMax) * 100));
+      return `<div class="chart-hist-tick" style="bottom:${pct}%;border-color:${h.color}" title="${monthLabel(m.month)} ${h.label}: ${v.toFixed(1)}${unit}"></div>`;
+    }).join("") : "";
+    return `<div class="chart-col"><div class="chart-bars">${bars}${histTicks}</div><div class="chart-month-label">${monthLabel(m.month).slice(0, 3)}</div></div>`;
   }).join("");
   return `${legend}<div class="chart-frame">${cols}</div>`;
 }
@@ -423,12 +462,24 @@ function renderInsights(year) {
 
   const weatherBody = weather ? (() => {
     const stats = monthlyWeatherStats(weather);
-    const tempChart = verticalBarChart({ series: [{ key: "avgHigh", label: "Avg High", color: "#2a78d6" }, { key: "avgLow", label: "Avg Low", color: "#eb6834" }], months: stats.months, unit: "°F" });
-    const rainChart = verticalBarChart({ series: [{ key: "precip", label: "Rainfall", color: "#1baf7a" }], months: stats.months, unit: "in", labels: true });
-    return `<div class="chart-card"><h4>Monthly Temperatures (avg high/low, °F)</h4>${tempChart}</div>
+    const hist = historicalWeatherStats();
+    const hasHistory = state.data.weather.some((w) => Number(w.year) !== Number(year));
+    const monthsMerged = stats.months.map((m, index) => ({ ...m, histHigh: hist.monthly[index]?.avgHigh, histLow: hist.monthly[index]?.avgLow, histPrecip: hist.monthly[index]?.avgPrecip }));
+    const tempChart = verticalBarChart({
+      series: [{ key: "avgHigh", label: "Avg High", color: "#2a78d6" }, { key: "avgLow", label: "Avg Low", color: "#eb6834" }],
+      months: monthsMerged, unit: "°F",
+      historical: hasHistory ? [{ key: "histHigh", color: "#2a78d6", label: "Historical Avg High" }, { key: "histLow", color: "#eb6834", label: "Historical Avg Low" }] : null,
+    });
+    const rainChart = verticalBarChart({
+      series: [{ key: "precip", label: "Rainfall", color: "#1baf7a" }],
+      months: monthsMerged, unit: "in", labels: true,
+      historical: hasHistory ? [{ key: "histPrecip", color: "#1baf7a", label: "Historical Avg" }] : null,
+    });
+    const histSummary = hasHistory ? `<p class="hist-summary">Historical average (since 2021, ${hist.yearsCount} yr${hist.yearsCount === 1 ? "" : "s"} of data): ${hist.overallHigh != null ? hist.overallHigh.toFixed(0) : "—"}°F high · ${hist.overallLow != null ? hist.overallLow.toFixed(0) : "—"}°F low · ${hist.overallPrecip.toFixed(1)}in/yr rainfall</p>` : "";
+    return `${histSummary}<div class="chart-card"><h4>Monthly Temperatures (avg high/low, °F)</h4>${tempChart}</div>
       <div class="chart-card"><h4>Monthly Rainfall (in)</h4>${rainChart}</div>
       <div class="stat-tiles">${statTile("Days ≥ 90°F", stats.hot90)}${statTile("Days ≥ 95°F", stats.hot95)}${statTile("Days ≤ 32°F", stats.cold32)}</div>`;
-  })() : `<div class="empty-state">No weather data yet for ${year}. Fetch historical highs, lows, and rainfall for zip 98642.</div>`;
+  })() : `<div class="empty-state">No weather data yet for ${year}. Fetch historical highs, lows, and rainfall since 2021 for zip 98642.</div>`;
 
   const ratingBody = monthlyEntries.length ? (() => {
     const monthly = monthlyRatingStats(monthlyEntries);
@@ -439,7 +490,7 @@ function renderInsights(year) {
   })() : `<div class="empty-state">No Monthly Updates logged yet for ${year}.</div>`;
 
   return `<div class="insights-pane">
-    <div class="insights-section"><div class="section-head"><h3>Weather</h3><button class="text-button" data-action="fetch-weather" data-year="${year}">${weather ? "Refresh" : "Fetch"} weather data</button></div>${weatherBody}</div>
+    <div class="insights-section"><div class="section-head"><h3>Weather</h3><button class="text-button" data-action="fetch-weather">${state.data.weather.length ? "Refresh" : "Fetch"} weather history</button></div>${weatherBody}</div>
     <div class="insights-section"><div class="section-head"><h3>Seed Ratings</h3></div>${ratingBody}</div>
   </div>`;
 }
@@ -723,22 +774,25 @@ async function saveMonthlyUpdate(form) {
   toast(`${monthLabel(month)} update saved.`);
 }
 
-async function fetchWeatherYear(year) {
+async function fetchWeatherHistory() {
+  const start = "2021-01-01";
   const now = new Date();
-  const isCurrentYear = Number(year) === now.getFullYear();
-  const start = `${year}-01-01`;
-  const end = isCurrentYear ? new Date(now.getTime() - 86400000).toISOString().slice(0, 10) : `${year}-12-31`;
+  const end = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
   const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${GARDEN_LOCATION.lat}&longitude=${GARDEN_LOCATION.lon}&start_date=${start}&end_date=${end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FLos_Angeles`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Could not fetch weather data.");
   const json = await response.json();
-  const days = (json.daily?.time || []).map((date, index) => ({
-    date,
-    tempHighF: json.daily.temperature_2m_max[index],
-    tempLowF: json.daily.temperature_2m_min[index],
-    precipIn: json.daily.precipitation_sum[index],
-  }));
-  await window.SproutStore.saveWeatherYear(year, days);
+  const byYear = new Map();
+  const times = json.daily?.time || [];
+  for (let index = 0; index < times.length; index++) {
+    const date = times[index];
+    const year = Number(date.slice(0, 4));
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push({ date, tempHighF: json.daily.temperature_2m_max[index], tempLowF: json.daily.temperature_2m_min[index], precipIn: json.daily.precipitation_sum[index] });
+  }
+  for (const [year, days] of byYear) {
+    await window.SproutStore.saveWeatherYear(year, days);
+  }
 }
 
 async function saveYearUpdate(form) {
@@ -1038,12 +1092,11 @@ document.addEventListener("click", async (event) => {
     if (action === "edit-monthly-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); openModal({ type: "monthlyUpdate", year: entry.year, month: entry.month }); }
     if (action === "open-monthly-banner") { state.year = Number(button.dataset.year); state.tab = "year"; state.yearSubTab = "updates"; openModal({ type: "monthlyUpdate", year: Number(button.dataset.year), month: Number(button.dataset.month) }); }
     if (action === "fetch-weather") {
-      const year = button.dataset.year;
       button.disabled = true;
       button.textContent = "Fetching…";
-      await fetchWeatherYear(year);
+      await fetchWeatherHistory();
       render();
-      toast("Weather data updated.");
+      toast("Weather history updated.");
     }
     if (action === "close-modal" || (action === "modal-backdrop" && event.target === button)) closeModal();
     if (action === "clear-selection") { state.selected = null; render(); }
