@@ -486,7 +486,8 @@ function verticalBarChart({ series, months, unit, max, labels, historical, yAxis
     overlaySvg = `<svg class="chart-hist-svg" viewBox="0 0 100 100" preserveAspectRatio="none">${paths}</svg>`;
   }
   const yAxisHtml = yAxis ? `<div class="chart-y-axis">${[4, 3, 2, 1, 0].map((i) => `<span>${Math.round((axisMax * i) / 4)}${unit}</span>`).join("")}</div>` : "";
-  return `${legend}<div class="chart-plot">${yAxisHtml}<div class="chart-frame-wrap"><div class="chart-frame">${cols}${overlaySvg}</div><div class="chart-labels-row">${labelCols}</div></div></div>`;
+  const gridlines = yAxis ? [1, 2, 3, 4].map((i) => `<div class="chart-gridline" style="bottom:${i * 25}%"></div>`).join("") : "";
+  return `${legend}<div class="chart-plot">${yAxisHtml}<div class="chart-frame-wrap"><div class="chart-frame">${gridlines}${cols}${overlaySvg}<div class="chart-x-axis"></div></div><div class="chart-labels-row">${labelCols}</div></div></div>`;
 }
 
 function statTile(label, value) {

@@ -160,7 +160,9 @@ h1,h2,h3,strong{font-weight:500}
 .chart-frame-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
 .chart-frame{position:relative;display:flex;align-items:flex-end;gap:6px;height:160px;padding-top:8px}
 .chart-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;height:100%}
-.chart-bars{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:3px;position:relative;border-bottom:1px solid var(--line)}
+.chart-bars{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:3px;position:relative}
+.chart-x-axis{position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);pointer-events:none}
+.chart-gridline{position:absolute;left:0;right:0;height:0;border-top:1px solid rgba(0,0,0,.1);pointer-events:none}
 .chart-bar{width:100%;max-width:16px;border-radius:4px 4px 0 0;position:relative;min-height:2px}
 .chart-bar-value{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10.5px;color:var(--muted);white-space:nowrap}
 .chart-labels-row{display:flex;gap:6px;margin-top:6px}
