@@ -12,7 +12,7 @@ export const SPROUT_CONFIG = {
   householdId: "shared",
   allowedEmails: ["allenkevinc@gmail.com", "meganec96@gmail.com"],
   // Reuse the existing signed-upload Worker, or deploy cloudflare-worker.js.
-  cloudinaryWorkerUrl: "PASTE_CLOUDFLARE_WORKER_URL",
+  cloudinaryWorkerUrl: "https://sprout-images.allenkevinc.workers.dev",
   cloudinaryFolder: "Sprout",
   photoMaxDimension: 1500,
   photoMaxBytes: 3.5 * 1024 * 1024,
