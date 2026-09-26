@@ -251,7 +251,7 @@ function renderPlantModal(plant) {
   const water = initial.water || "medium";
   const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><label class="field full"><span>Common name</span><input id="plant-name" name="commonName" value="${esc(commonName)}" list="plant-varieties" maxlength="80" autocomplete="off" required><datalist id="plant-varieties">${state.data.varieties.sort((a,b)=>a.commonName.localeCompare(b.commonName)).map((item) => `<option value="${esc(item.commonName)}"></option>`).join("")}</datalist></label><label class="field full"><span>Planter box</span><select name="bedId" required>${bedsForYear().map((item) => `<option value="${item.id}" ${item.id === bed?.id ? "selected" : ""}>Bed ${item.number}</option>`).join("")}</select></label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field full"><span>Icon</span><div class="choice-row">${ICONS.map((item) => `<button type="button" class="choice icon-choice ${item === selectedIcon ? "selected" : ""}" data-field-choice="icon" data-value="${item}">${item}</button>`).join("")}</div><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field"><span>Planting date</span><input name="plantedDate" type="date" value="${esc(initial.plantedDate || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
   const archive = plant ? `<button class="${plant.archived ? "secondary-button" : "danger-button"}" data-action="archive-plant" data-id="${plant.id}">${plant.archived ? "Restore" : "Archive"}</button>` : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
-  return modalShell(plant ? `Edit ${plant.commonName}` : "Add a Plant", body, `${archive}<button class="primary-button" type="submit" form="plant-form">Save</button>`, true);
+  return modalShell(plant ? `Edit ${plant.commonName}` : "Add a Plant", body, `${archive}<button class="primary-button" type="button" data-action="save-plant">Save</button>`, true);
 }
 
 function levelSelector(name, label, selected, lowIcon, mediumIcon, highIcon) {
@@ -268,7 +268,7 @@ function renderPlantDetails(plant) {
 
 function renderLogModal(plant) {
   const body = `<form id="log-form" class="form-grid"><input type="hidden" name="plantId" value="${plant.id}"><label class="field full"><span>Entry type</span><select name="type">${LOG_TYPES.map((type) => `<option value="${type}">${title(type)}</option>`).join("")}</select></label><label class="field full"><span>Note</span><textarea name="note" maxlength="3000" placeholder="What happened?"></textarea></label><label class="field full"><span>Photo (optional)</span><input name="photo" type="file" accept="image/*"></label></form>`;
-  return modalShell(`Add to ${plant.commonName}`, body, '<button class="secondary-button" data-action="plant-details" data-id="'+plant.id+'">Cancel</button><button class="primary-button" type="submit" form="log-form">Save entry</button>');
+  return modalShell(`Add to ${plant.commonName}`, body, '<button class="secondary-button" data-action="plant-details" data-id="'+plant.id+'">Cancel</button><button class="primary-button" type="button" data-action="save-log">Save entry</button>');
 }
 
 function renderDuplicateModal() {
@@ -276,7 +276,7 @@ function renderDuplicateModal() {
   const source = Number(state.year || state.data.settings.activeYear);
   const target = Math.max(CURRENT_YEAR, ...years.map((item) => Number(item.year))) + 1;
   const body = `<form id="duplicate-form" class="form-grid"><label class="field"><span>Copy from</span><select name="sourceYear">${years.map((year) => `<option value="${year.year}" ${Number(year.year) === source ? "selected" : ""}>${year.year}</option>`).join("")}</select></label><label class="field"><span>New year</span><input name="targetYear" type="number" min="2020" max="2100" value="${target}" required></label><div class="form-note field full">Beds and active plant placements will be copied. Plants begin as Planned, with no planting date or photos. The original year remains unchanged.</div></form>`;
-  return modalShell("Duplicate a Year", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="submit" form="duplicate-form">Duplicate</button>');
+  return modalShell("Duplicate a Year", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="button" data-action="save-duplicate">Duplicate</button>');
 }
 
 function renderConfirmModal() {
@@ -334,12 +334,18 @@ async function savePlant(form) {
   if (widthIn > bed.widthIn || heightIn > bed.heightIn) throw new Error("This plant footprint is larger than its planter box.");
   const commonName = String(values.get("commonName") || "").trim();
   const variety = { commonName, icon: values.get("icon"), color: values.get("color"), sun: values.get("sun"), water: values.get("water") };
-  await window.SproutStore.saveVariety(variety);
   const changingBed = existing && existing.bedId !== bed.id;
   const x = existing && !changingBed ? clamp(existing.x, 0, bed.widthIn - widthIn) : snap((bed.widthIn - widthIn) / 2);
   const y = existing && !changingBed ? clamp(existing.y, 0, bed.heightIn - heightIn) : snap((bed.heightIn - heightIn) / 2);
-  const saved = await window.SproutStore.savePlant({ ...existing, id: existing?.id, year: state.year, bedId: bed.id, commonName, widthIn, heightIn, icon: values.get("icon"), color: values.get("color"), sun: values.get("sun"), water: values.get("water"), status: values.get("status"), plantedDate: values.get("plantedDate"), notes: values.get("notes"), x, y });
-  state.modal = null; state.mode = "plants"; state.selected = { type: "plant", id: saved.id }; render(); toast(existing ? "Plant updated." : "Plant added. Drag it into place in Plants mode.");
+  const varietySaving = window.SproutStore.saveVariety(variety);
+  const plantSaving = window.SproutStore.savePlant({ ...existing, id: existing?.id, year: state.year, bedId: bed.id, commonName, widthIn, heightIn, icon: values.get("icon"), color: values.get("color"), sun: values.get("sun"), water: values.get("water"), status: values.get("status"), plantedDate: values.get("plantedDate"), notes: values.get("notes"), x, y });
+  state.modal = null;
+  state.mode = "plants";
+  render();
+  const [, saved] = await Promise.all([varietySaving, plantSaving]);
+  state.selected = { type: "plant", id: saved.id };
+  render();
+  toast(existing ? "Plant updated." : "Plant added. Drag it into place in Plants mode.");
 }
 
 async function saveLog(form) {
@@ -583,6 +589,39 @@ document.addEventListener("click", async (event) => {
       button.disabled = true;
       button.textContent = "Saving…";
       await saveBed(form);
+    }
+    if (action === "save-plant") {
+      const form = $("#plant-form");
+      if (!form) throw new Error("The plant editor could not be found. Close it and try again.");
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        throw new Error("Complete the highlighted plant fields and try again.");
+      }
+      button.disabled = true;
+      button.textContent = "Saving…";
+      await savePlant(form);
+    }
+    if (action === "save-log") {
+      const form = $("#log-form");
+      if (!form) throw new Error("The journal editor could not be found. Close it and try again.");
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        throw new Error("Complete the highlighted journal fields and try again.");
+      }
+      button.disabled = true;
+      button.textContent = "Saving…";
+      await saveLog(form);
+    }
+    if (action === "save-duplicate") {
+      const form = $("#duplicate-form");
+      if (!form) throw new Error("The year editor could not be found. Close it and try again.");
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        throw new Error("Choose a valid year and try again.");
+      }
+      button.disabled = true;
+      button.textContent = "Duplicating…";
+      await duplicateYear(form);
     }
     if (action === "delete-bed") { const bed = state.data.beds.find((item) => item.id === state.modal.id); state.modal = { type: "confirm", title: `Delete Bed ${bed.number}?`, message: "This removes the bed and moves its plants into the archive so their journals are preserved.", confirmLabel: "Delete bed", run: async () => { await window.SproutStore.deleteBed(bed); state.selected = null; } }; render(); }
     if (action === "archive-plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); await window.SproutStore.archivePlant(plant, !plant.archived); state.modal = null; state.selected = null; render(); toast(plant.archived ? "Plant restored." : "Plant moved to the archive."); }
