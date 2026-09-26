@@ -6,7 +6,17 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const root = $("#app");
 const CURRENT_YEAR = new Date().getFullYear();
 const PX_PER_INCH = 4;
-const ICONS = ["🌱", "🍅", "🥕", "🥬", "🌿", "🫑", "🥒", "🫘", "🌻", "🥔", "🍓", "🧅", "🥦", "🌽", "🫛", "🌶️"];
+const PLANT_CATEGORIES = [
+  { id: "tomatoes", label: "Tomatoes", icon: "🍅" },
+  { id: "carrots", label: "Carrots", icon: "🥕" },
+  { id: "chiles", label: "Chiles", icon: "🌶️" },
+  { id: "cucumbers", label: "Cucumbers", icon: "🥒" },
+  { id: "beans", label: "Beans", icon: "🫘" },
+  { id: "potatoes", label: "Potatoes", icon: "🥔" },
+  { id: "berries", label: "Berries", icon: "🍓" },
+  { id: "alliums", label: "Alliums", icon: "🧅" },
+  { id: "greens", label: "Greens", icon: "🥬" },
+];
 const COLORS = ["#4f8d5b", "#75a843", "#a7b43c", "#d8a62d", "#df7435", "#c94c49", "#a95a87", "#735ca7", "#3f83a8", "#3b8c83"];
 const STATUSES = ["planned", "seeded", "planted", "growing", "harvesting", "finished", "failed", "removed"];
 const LOG_TYPES = ["note", "watered", "fertilised", "pruned", "transplanted", "pest or disease", "treatment", "harvested", "status change"];
@@ -17,6 +27,7 @@ const state = {
   tab: "garden",
   year: null,
   plantFilter: "active",
+  plantCategory: "all",
   search: "",
   modal: null,
   selected: null,
@@ -40,6 +51,13 @@ const bedsForYear = () => state.data.beds.filter((bed) => Number(bed.year) === N
 const plantsForYear = () => state.data.plants.filter((plant) => Number(plant.year) === Number(state.year));
 const bedFor = (plant) => state.data.beds.find((bed) => bed.id === plant.bedId);
 const varietyFor = (name) => state.data.varieties.find((item) => item.normalizedName === String(name || "").trim().toLowerCase());
+const categoryById = (id) => PLANT_CATEGORIES.find((category) => category.id === id);
+const categoryForPlant = (plant = {}) => {
+  if (categoryById(plant.category)) return plant.category;
+  if (plant.icon === "🫑" || plant.icon === "🌶️") return "chiles";
+  return PLANT_CATEGORIES.find((category) => category.icon === plant.icon)?.id || "greens";
+};
+const iconForPlant = (plant) => categoryById(categoryForPlant(plant))?.icon || "🥬";
 
 function icon(name) {
   const paths = {
@@ -173,7 +191,7 @@ function renderBed(bed, plants) {
   const visualTop = quarterTurn ? (height - width) / 2 : 0;
   return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${width}px;height:${height}px">
     <div class="bed ${state.selected?.type === "bed" && state.selected.id === bed.id ? "selected" : ""}" style="transform:rotate(${rotation}deg)">
-      ${plants.map((plant) => `<div class="plant-marker ${state.selected?.type === "plant" && state.selected.id === plant.id ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(plant.color)};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(plant.icon)}</span><span class="plant-label">${esc(plant.commonName)}</span></div>`).join("")}
+      ${plants.map((plant) => `<div class="plant-marker ${state.selected?.type === "plant" && state.selected.id === plant.id ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(plant.color)};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(iconForPlant(plant))}</span><span class="plant-label">${esc(plant.commonName)}</span></div>`).join("")}
     </div>
     <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">[${bed.number}]</span>
   </div>`;
@@ -181,7 +199,7 @@ function renderBed(bed, plants) {
 
 function renderSelectionPlant(plant) {
   const bed = bedFor(plant);
-  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(plant.color)}">${esc(plant.icon)}</div><div class="selection-copy"><h3>${esc(plant.commonName)}</h3><p>Bed ${bed?.number || "—"} · ${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div><div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
+  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(plant.color)}">${esc(iconForPlant(plant))}</div><div class="selection-copy"><h3>${esc(plant.commonName)}</h3><p>Bed ${bed?.number || "—"} · ${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div><div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
 }
 
 function renderSelectionBed(bed) {
@@ -192,11 +210,13 @@ function renderPlants() {
   const query = state.search.trim().toLowerCase();
   const plants = plantsForYear()
     .filter((plant) => state.plantFilter === "all" || (state.plantFilter === "archived" ? plant.archived : !plant.archived))
+    .filter((plant) => state.plantCategory === "all" || categoryForPlant(plant) === state.plantCategory)
     .filter((plant) => !query || plant.commonName.toLowerCase().includes(query) || plant.notes?.toLowerCase().includes(query))
     .sort((a, b) => a.commonName.localeCompare(b.commonName) || (bedFor(a)?.number || 99) - (bedFor(b)?.number || 99));
   return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Plants</h1><p>${state.year} · ${plants.length} shown</p></div><div class="page-actions">${yearIsReadOnly() ? "" : '<button class="primary-button" data-action="add-plant">Add plant</button>'}</div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search plants" value="${esc(state.search)}"></label><select class="filter-select" id="plant-filter"><option value="active" ${state.plantFilter === "active" ? "selected" : ""}>Active</option><option value="archived" ${state.plantFilter === "archived" ? "selected" : ""}>Archived</option><option value="all" ${state.plantFilter === "all" ? "selected" : ""}>All</option></select></div>
-    <div class="plant-list">${plants.length ? plants.map((plant) => { const bed = bedFor(plant); return `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(plant.color)}"><span class="plant-avatar">${esc(plant.icon)}</span><span class="plant-main"><h3>${esc(plant.commonName)}</h3><p>Bed ${bed?.number || "—"} · ${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}${plant.plantedDate ? ` · ${shortDate(plant.plantedDate)}` : ""}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`; }).join("") : '<div class="empty-state">No plants match this view.</div>'}</div>
+    <div class="plant-category-tabs" role="tablist" aria-label="Plant categories"><button role="tab" aria-selected="${state.plantCategory === "all"}" class="${state.plantCategory === "all" ? "active" : ""}" data-action="plant-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.plantCategory === category.id}" class="${state.plantCategory === category.id ? "active" : ""}" data-action="plant-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
+    <div class="plant-list">${plants.length ? plants.map((plant) => { const bed = bedFor(plant); return `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(plant.color)}"><span class="plant-avatar">${esc(iconForPlant(plant))}</span><span class="plant-main"><h3>${esc(plant.commonName)}</h3><p>Bed ${bed?.number || "—"} · ${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}${plant.plantedDate ? ` · ${shortDate(plant.plantedDate)}` : ""}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`; }).join("") : '<div class="empty-state">No plants match this view.</div>'}</div>
   </section>`;
 }
 
@@ -253,11 +273,12 @@ function renderPlantModal(plant) {
   const sizeW = splitInches(initial.widthIn || 12);
   const sizeH = splitInches(initial.heightIn || 12);
   const commonName = initial.commonName || "";
-  const selectedIcon = initial.icon || "🌱";
+  const selectedCategory = initial.category || initial.icon ? categoryForPlant(initial) : PLANT_CATEGORIES[0].id;
+  const selectedIcon = categoryById(selectedCategory).icon;
   const selectedColor = initial.color || COLORS[0];
   const sun = initial.sun || "medium";
   const water = initial.water || "medium";
-  const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><label class="field full"><span>Common name</span><input id="plant-name" name="commonName" value="${esc(commonName)}" list="plant-varieties" maxlength="80" autocomplete="off" required><datalist id="plant-varieties">${state.data.varieties.sort((a,b)=>a.commonName.localeCompare(b.commonName)).map((item) => `<option value="${esc(item.commonName)}"></option>`).join("")}</datalist></label><label class="field full"><span>Planter box</span><select name="bedId" required>${bedsForYear().map((item) => `<option value="${item.id}" ${item.id === bed?.id ? "selected" : ""}>Bed ${item.number}</option>`).join("")}</select></label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field full"><span>Icon</span><div class="choice-row">${ICONS.map((item) => `<button type="button" class="choice icon-choice ${item === selectedIcon ? "selected" : ""}" data-field-choice="icon" data-value="${item}">${item}</button>`).join("")}</div><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field"><span>Planting date</span><input name="plantedDate" type="date" value="${esc(initial.plantedDate || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
+  const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><label class="field full"><span>Common name</span><input id="plant-name" name="commonName" value="${esc(commonName)}" list="plant-varieties" maxlength="80" autocomplete="off" required><datalist id="plant-varieties">${state.data.varieties.sort((a,b)=>a.commonName.localeCompare(b.commonName)).map((item) => `<option value="${esc(item.commonName)}"></option>`).join("")}</datalist></label><label class="field full"><span>Planter box</span><select name="bedId" required>${bedsForYear().map((item) => `<option value="${item.id}" ${item.id === bed?.id ? "selected" : ""}>Bed ${item.number}</option>`).join("")}</select></label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field full"><span>Category</span><div class="choice-row plant-category-choices">${PLANT_CATEGORIES.map((category) => `<button type="button" class="choice plant-category-choice ${category.id === selectedCategory ? "selected" : ""}" data-field-choice="category" data-value="${category.id}" data-icon="${category.icon}"><span>${category.icon}</span><small>${category.label}</small></button>`).join("")}</div><input type="hidden" name="category" value="${selectedCategory}"><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field"><span>Planting date</span><input name="plantedDate" type="date" value="${esc(initial.plantedDate || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
   const archive = plant ? `<button class="${plant.archived ? "secondary-button" : "danger-button"}" data-action="archive-plant" data-id="${plant.id}">${plant.archived ? "Restore" : "Archive"}</button>` : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
   return modalShell(plant ? `Edit ${plant.commonName}` : "Add a Plant", body, `${archive}<button class="primary-button" type="button" data-action="save-plant">Save</button>`, true);
 }
@@ -270,7 +291,7 @@ function renderPlantDetails(plant) {
   if (!plant) return "";
   const bed = bedFor(plant);
   const logs = state.data.logs.filter((entry) => entry.plantId === plant.id).sort((a, b) => b.createdAt - a.createdAt);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(plant.color)}">${esc(plant.icon)}</div><div class="detail-title"><h2>${esc(plant.commonName)}</h2><p>Bed ${bed?.number || "—"} · ${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Planted</span><strong>${shortDate(plant.plantedDate)}</strong></div><div class="fact"><span>Sun</span><strong>${plant.sun === "low" ? "☁️" : plant.sun === "high" ? "☀️" : "⛅"} ${plant.sun}</strong></div><div class="fact"><span>Water</span><strong>${plant.water === "low" ? "💧" : plant.water === "high" ? "💧💧💧" : "💧💧"} ${plant.water}</strong></div></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(plant.commonName)} photo" loading="lazy">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
+  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(plant.color)}">${esc(iconForPlant(plant))}</div><div class="detail-title"><h2>${esc(plant.commonName)}</h2><p>Bed ${bed?.number || "—"} · ${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Planted</span><strong>${shortDate(plant.plantedDate)}</strong></div><div class="fact"><span>Sun</span><strong>${plant.sun === "low" ? "☁️" : plant.sun === "high" ? "☀️" : "⛅"} ${plant.sun}</strong></div><div class="fact"><span>Water</span><strong>${plant.water === "low" ? "💧" : plant.water === "high" ? "💧💧💧" : "💧💧"} ${plant.water}</strong></div></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(plant.commonName)} photo" loading="lazy">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
   return modalShell(plant.commonName, body, "", true);
 }
 
@@ -341,12 +362,14 @@ async function savePlant(form) {
   if (widthIn < state.data.settings.gridIn || heightIn < state.data.settings.gridIn) throw new Error("Plant size must be at least one grid square.");
   if (widthIn > bed.widthIn || heightIn > bed.heightIn) throw new Error("This plant footprint is larger than its planter box.");
   const commonName = String(values.get("commonName") || "").trim();
-  const variety = { commonName, icon: values.get("icon"), color: values.get("color"), sun: values.get("sun"), water: values.get("water") };
+  const category = categoryById(values.get("category"))?.id || "greens";
+  const plantIcon = categoryById(category).icon;
+  const variety = { commonName, category, icon: plantIcon, color: values.get("color"), sun: values.get("sun"), water: values.get("water") };
   const changingBed = existing && existing.bedId !== bed.id;
   const x = existing && !changingBed ? clamp(existing.x, 0, bed.widthIn - widthIn) : snap((bed.widthIn - widthIn) / 2);
   const y = existing && !changingBed ? clamp(existing.y, 0, bed.heightIn - heightIn) : snap((bed.heightIn - heightIn) / 2);
   const varietySaving = window.SproutStore.saveVariety(variety);
-  const plantSaving = window.SproutStore.savePlant({ ...existing, id: existing?.id, year: state.year, bedId: bed.id, commonName, widthIn, heightIn, icon: values.get("icon"), color: values.get("color"), sun: values.get("sun"), water: values.get("water"), status: values.get("status"), plantedDate: values.get("plantedDate"), notes: values.get("notes"), x, y });
+  const plantSaving = window.SproutStore.savePlant({ ...existing, id: existing?.id, year: state.year, bedId: bed.id, commonName, widthIn, heightIn, category, icon: plantIcon, color: values.get("color"), sun: values.get("sun"), water: values.get("water"), status: values.get("status"), plantedDate: values.get("plantedDate"), notes: values.get("notes"), x, y });
   state.modal = null;
   state.mode = "plants";
   render();
@@ -384,6 +407,7 @@ function applyFieldChoice(button) {
   $$(`[data-field-choice="${name}"]`, form).forEach((item) => item.classList.remove("selected"));
   button.classList.add("selected");
   field.value = button.dataset.value;
+  if (name === "category" && button.dataset.icon && form.elements.icon) form.elements.icon.value = button.dataset.icon;
 }
 
 function bindMap() {
@@ -573,6 +597,7 @@ document.addEventListener("click", async (event) => {
     if (action === "sign-in") await window.SproutStore.signIn();
     if (action === "sign-out") await window.SproutStore.signOut();
     if (action === "tab") { state.tab = button.dataset.tab; state.selected = null; state.modal = null; render(); }
+    if (action === "plant-category") { state.plantCategory = button.dataset.category; render(); }
     if (action === "mode") { state.mode = button.dataset.mode; state.selected = null; render(); }
     if (action === "add-bed") openModal({ type: "bed" });
     if (action === "edit-bed") openModal({ type: "bed", id: button.dataset.id });
@@ -662,7 +687,11 @@ document.addEventListener("input", (event) => {
     const match = varietyFor(event.target.value);
     if (!match) return;
     const form = event.target.form;
-    for (const name of ["icon", "color", "sun", "water"]) {
+    const category = categoryForPlant(match);
+    form.elements.category.value = category;
+    form.elements.icon.value = categoryById(category).icon;
+    $$('[data-field-choice="category"]', form).forEach((button) => button.classList.toggle("selected", button.dataset.value === category));
+    for (const name of ["color", "sun", "water"]) {
       form.elements[name].value = match[name];
       $$(`[data-field-choice="${name}"]`, form).forEach((button) => button.classList.toggle("selected", button.dataset.value === match[name]));
     }
