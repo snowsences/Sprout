@@ -69,10 +69,10 @@ h1,h2,h3,strong{font-weight:500}
 .garden-world.beds-inert .bed-wrap{cursor:default}
 .garden-world.layout-mode .plant-marker{opacity:.3}
 .bed-wrap{position:absolute;touch-action:none}
-.bed{position:absolute;inset:0;border:3px solid #694d37;border-radius:8px;background:repeating-linear-gradient(135deg,#a98969 0,#a98969 13px,#a38262 13px,#a38262 26px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18),0 3px 8px rgba(63,43,27,.2);overflow:hidden;touch-action:none}
+.bed{position:absolute;inset:0;border:3px solid #694d37;border-radius:16px;background:repeating-linear-gradient(135deg,#a98969 0,#a98969 13px,#a38262 13px,#a38262 26px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18),0 3px 8px rgba(63,43,27,.2);overflow:hidden;touch-action:none}
 .bed.selected{outline:3px solid #fff;box-shadow:0 0 0 6px var(--green),inset 0 0 0 2px rgba(255,255,255,.18)}
 .bed-number{position:absolute;z-index:3;display:grid;place-items:center;min-width:28px;height:28px;padding:0 7px;border-radius:8px;background:rgba(255,253,247,.94);color:#523a29;font-weight:500;box-shadow:0 1px 4px rgba(40,25,15,.18);transform:translateY(calc(-100% - 6px));pointer-events:none}
-.plant-marker{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;border:2px solid rgba(18,51,29,.45);border-radius:16px;background:var(--plant-color,#5f9f65);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22),0 2px 5px rgba(32,45,31,.25);touch-action:none;user-select:none}
+.plant-marker{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;border:2px solid rgba(18,51,29,.45);border-radius:8px;background:var(--plant-color,#5f9f65);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22),0 2px 5px rgba(32,45,31,.25);touch-action:none;user-select:none}
 .resize-handle{position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--ink);box-shadow:0 1px 4px rgba(20,30,22,.35);z-index:6;touch-action:none}
 .rh-nw{left:0;top:0;transform:translate(-50%,-50%);cursor:nwse-resize}
 .rh-ne{left:100%;top:0;transform:translate(-50%,-50%);cursor:nesw-resize}
