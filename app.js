@@ -211,7 +211,7 @@ function renderSettings() {
 }
 
 function dimensionInputs(name, value, minimum = 0) {
-  return `<span class="dimension-row"><input name="${name}-ft" type="number" min="${minimum}" max="200" value="${value.feet}" inputmode="numeric" required><span>ft</span><input name="${name}-in" type="number" min="0" max="11" step="6" value="${value.inches}" inputmode="numeric" required><span>in</span></span>`;
+  return `<span class="dimension-row"><input name="${name}-ft" type="number" min="${minimum}" max="200" value="${value.feet}" inputmode="numeric" required><span>ft</span><input name="${name}-in" type="number" min="0" max="11" step="1" value="${value.inches}" inputmode="numeric" required><span>in</span></span>`;
 }
 
 function renderModal() {
@@ -234,9 +234,9 @@ function renderBedModal(bed) {
   const number = bed?.number || [...Array(10)].map((_, index) => index + 1).find((value) => !used.has(value));
   const width = splitInches(bed?.widthIn || 48);
   const height = splitInches(bed?.heightIn || 96);
-  const body = `<form id="bed-form" class="form-grid"><input type="hidden" name="id" value="${bed?.id || ""}"><label class="field full"><span>Bed number</span><div class="choice-row">${[...Array(10)].map((_, index) => index + 1).map((value) => `<button type="button" class="choice ${value === number ? "selected" : ""}" data-field-choice="bed-number" data-value="${value}" ${used.has(value) ? "disabled" : ""}>${value}</button>`).join("")}</div><input type="hidden" name="number" value="${number}"></label><label class="field"><span>Width</span>${dimensionInputs("bed-width", width)}</label><label class="field"><span>Length</span>${dimensionInputs("bed-height", height)}</label><label class="field full"><span>Rotation</span><div class="choice-row"><button type="button" class="choice ${!bed?.rotation ? "selected" : ""}" data-field-choice="rotation" data-value="0">0°</button><button type="button" class="choice ${Number(bed?.rotation) === 90 ? "selected" : ""}" data-field-choice="rotation" data-value="90">90°</button></div><input type="hidden" name="rotation" value="${bed?.rotation || 0}"></label><label class="field full"><span>Notes (optional)</span><textarea name="notes" maxlength="1000" placeholder="Anything useful about this bed…">${esc(bed?.notes || "")}</textarea></label></form>`;
+  const body = `<form id="bed-form" class="form-grid"><input type="hidden" name="id" value="${bed?.id || ""}"><label class="field full"><span>Bed number</span><div class="choice-row">${[...Array(10)].map((_, index) => index + 1).map((value) => `<button type="button" class="choice ${value === number ? "selected" : ""}" data-field-choice="number" data-value="${value}" ${used.has(value) ? "disabled" : ""}>${value}</button>`).join("")}</div><input type="hidden" name="number" value="${number}"></label><label class="field"><span>Width</span>${dimensionInputs("bed-width", width)}</label><label class="field"><span>Length</span>${dimensionInputs("bed-height", height)}</label><label class="field full"><span>Rotation</span><div class="choice-row"><button type="button" class="choice ${!bed?.rotation ? "selected" : ""}" data-field-choice="rotation" data-value="0">0°</button><button type="button" class="choice ${Number(bed?.rotation) === 90 ? "selected" : ""}" data-field-choice="rotation" data-value="90">90°</button></div><input type="hidden" name="rotation" value="${bed?.rotation || 0}"></label><label class="field full"><span>Notes (optional)</span><textarea name="notes" maxlength="1000" placeholder="Anything useful about this bed…">${esc(bed?.notes || "")}</textarea></label></form>`;
   const deleteButton = bed ? '<button class="danger-button" data-action="delete-bed">Delete bed</button>' : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
-  return modalShell(bed ? `Edit Bed ${bed.number}` : "Add a Bed", body, `${deleteButton}<button class="primary-button" data-action="submit-form" data-form="bed-form">Save</button>`);
+  return modalShell(bed ? `Edit Bed ${bed.number}` : "Add a Bed", body, `${deleteButton}<button class="primary-button" type="submit" form="bed-form">Save</button>`);
 }
 
 function renderPlantModal(plant) {
@@ -251,7 +251,7 @@ function renderPlantModal(plant) {
   const water = initial.water || "medium";
   const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><label class="field full"><span>Common name</span><input id="plant-name" name="commonName" value="${esc(commonName)}" list="plant-varieties" maxlength="80" autocomplete="off" required><datalist id="plant-varieties">${state.data.varieties.sort((a,b)=>a.commonName.localeCompare(b.commonName)).map((item) => `<option value="${esc(item.commonName)}"></option>`).join("")}</datalist></label><label class="field full"><span>Planter box</span><select name="bedId" required>${bedsForYear().map((item) => `<option value="${item.id}" ${item.id === bed?.id ? "selected" : ""}>Bed ${item.number}</option>`).join("")}</select></label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field full"><span>Icon</span><div class="choice-row">${ICONS.map((item) => `<button type="button" class="choice icon-choice ${item === selectedIcon ? "selected" : ""}" data-field-choice="icon" data-value="${item}">${item}</button>`).join("")}</div><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label>${levelSelector("sun", "Sun", sun, "☁️", "⛅", "☀️")}${levelSelector("water", "Water", water, "💧", "💧💧", "💧💧💧")}<label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field"><span>Planting date</span><input name="plantedDate" type="date" value="${esc(initial.plantedDate || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
   const archive = plant ? `<button class="${plant.archived ? "secondary-button" : "danger-button"}" data-action="archive-plant" data-id="${plant.id}">${plant.archived ? "Restore" : "Archive"}</button>` : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
-  return modalShell(plant ? `Edit ${plant.commonName}` : "Add a Plant", body, `${archive}<button class="primary-button" data-action="submit-form" data-form="plant-form">Save</button>`, true);
+  return modalShell(plant ? `Edit ${plant.commonName}` : "Add a Plant", body, `${archive}<button class="primary-button" type="submit" form="plant-form">Save</button>`, true);
 }
 
 function levelSelector(name, label, selected, lowIcon, mediumIcon, highIcon) {
@@ -268,7 +268,7 @@ function renderPlantDetails(plant) {
 
 function renderLogModal(plant) {
   const body = `<form id="log-form" class="form-grid"><input type="hidden" name="plantId" value="${plant.id}"><label class="field full"><span>Entry type</span><select name="type">${LOG_TYPES.map((type) => `<option value="${type}">${title(type)}</option>`).join("")}</select></label><label class="field full"><span>Note</span><textarea name="note" maxlength="3000" placeholder="What happened?"></textarea></label><label class="field full"><span>Photo (optional)</span><input name="photo" type="file" accept="image/*"></label></form>`;
-  return modalShell(`Add to ${plant.commonName}`, body, '<button class="secondary-button" data-action="plant-details" data-id="'+plant.id+'">Cancel</button><button class="primary-button" data-action="submit-form" data-form="log-form">Save entry</button>');
+  return modalShell(`Add to ${plant.commonName}`, body, '<button class="secondary-button" data-action="plant-details" data-id="'+plant.id+'">Cancel</button><button class="primary-button" type="submit" form="log-form">Save entry</button>');
 }
 
 function renderDuplicateModal() {
@@ -276,7 +276,7 @@ function renderDuplicateModal() {
   const source = Number(state.year || state.data.settings.activeYear);
   const target = Math.max(CURRENT_YEAR, ...years.map((item) => Number(item.year))) + 1;
   const body = `<form id="duplicate-form" class="form-grid"><label class="field"><span>Copy from</span><select name="sourceYear">${years.map((year) => `<option value="${year.year}" ${Number(year.year) === source ? "selected" : ""}>${year.year}</option>`).join("")}</select></label><label class="field"><span>New year</span><input name="targetYear" type="number" min="2020" max="2100" value="${target}" required></label><div class="form-note field full">Beds and active plant placements will be copied. Plants begin as Planned, with no planting date or photos. The original year remains unchanged.</div></form>`;
-  return modalShell("Duplicate a Year", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" data-action="submit-form" data-form="duplicate-form">Duplicate</button>');
+  return modalShell("Duplicate a Year", body, '<button class="secondary-button" data-action="close-modal">Cancel</button><button class="primary-button" type="submit" form="duplicate-form">Duplicate</button>');
 }
 
 function renderConfirmModal() {
@@ -355,9 +355,14 @@ async function duplicateYear(form) {
 function applyFieldChoice(button) {
   const form = button.closest("form");
   const name = button.dataset.fieldChoice;
+  const field = form?.elements[name];
+  if (!field) {
+    toast("That option could not be selected.", "error");
+    return;
+  }
   $$(`[data-field-choice="${name}"]`, form).forEach((item) => item.classList.remove("selected"));
   button.classList.add("selected");
-  form.elements[name].value = button.dataset.value;
+  field.value = button.dataset.value;
 }
 
 function bindMap() {
@@ -561,7 +566,6 @@ document.addEventListener("click", async (event) => {
     if (action === "fit-map") $(".map-viewport")?._gardenFit();
     if (action === "duplicate-year") openModal({ type: "duplicate" });
     if (action === "view-year") { state.year = Number(button.dataset.year); state.tab = "garden"; state.map.initializedYear = null; render(); }
-    if (action === "submit-form") { const form = $(`#${button.dataset.form}`); if (!form.reportValidity()) return; button.disabled = true; if (form.id === "bed-form") await saveBed(form); if (form.id === "plant-form") await savePlant(form); if (form.id === "log-form") await saveLog(form); if (form.id === "duplicate-form") await duplicateYear(form); }
     if (action === "delete-bed") { const bed = state.data.beds.find((item) => item.id === state.modal.id); state.modal = { type: "confirm", title: `Delete Bed ${bed.number}?`, message: "This removes the bed and moves its plants into the archive so their journals are preserved.", confirmLabel: "Delete bed", run: async () => { await window.SproutStore.deleteBed(bed); state.selected = null; } }; render(); }
     if (action === "archive-plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); await window.SproutStore.archivePlant(plant, !plant.archived); state.modal = null; state.selected = null; render(); toast(plant.archived ? "Plant restored." : "Plant moved to the archive."); }
     if (action === "delete-log") { const log = state.data.logs.find((item) => item.id === button.dataset.id); if (confirm("Delete this journal entry?")) { await window.SproutStore.deleteLog(log); render(); } }
@@ -601,10 +605,37 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
-  if (event.target.id !== "garden-settings") return;
   event.preventDefault();
+  const form = event.target;
+  const modalSaves = {
+    "bed-form": { pending: "Saving…", run: saveBed },
+    "plant-form": { pending: "Saving…", run: savePlant },
+    "log-form": { pending: "Saving…", run: saveLog },
+    "duplicate-form": { pending: "Duplicating…", run: duplicateYear },
+  };
+
+  if (modalSaves[form.id]) {
+    const submitButton = document.querySelector(`[type="submit"][form="${form.id}"]`);
+    const originalText = submitButton?.textContent;
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = modalSaves[form.id].pending;
+    }
+    try {
+      await modalSaves[form.id].run(form);
+    } catch (error) {
+      toast(error?.message || "Sprout couldn’t save that change.", "error");
+      if (submitButton?.isConnected) {
+        submitButton.disabled = false;
+        submitButton.textContent = originalText;
+      }
+    }
+    return;
+  }
+
+  if (form.id !== "garden-settings") return;
   try {
-    const values = new FormData(event.target);
+    const values = new FormData(form);
     const widthIn = snap(toInches(values.get("garden-width-ft"), values.get("garden-width-in")));
     const heightIn = snap(toInches(values.get("garden-height-ft"), values.get("garden-height-in")));
     if (widthIn < 120 || heightIn < 120) throw new Error("The garden must be at least 10 feet in each direction.");
