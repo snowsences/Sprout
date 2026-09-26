@@ -28,9 +28,10 @@ let data = {
   settings: { widthIn: 360, heightIn: 240, gridIn: 6, activeYear: new Date().getFullYear() },
   years: [],
   beds: [],
-  varieties: [],
+  seeds: [],
   plants: [],
   logs: [],
+  yearUpdates: [],
   activity: [],
   fromCache: false,
 };
@@ -144,7 +145,7 @@ if (configured) {
   });
   db = initializeFirestore(app, {});
   const base = ["sproutHouseholds", SPROUT_CONFIG.householdId];
-  for (const key of ["settings", "years", "beds", "varieties", "plants", "logs", "activity"]) {
+  for (const key of ["settings", "years", "beds", "seeds", "plants", "logs", "yearUpdates", "activity"]) {
     refs[key] = collection(db, ...base, key);
   }
 
@@ -167,7 +168,7 @@ if (configured) {
       return;
     }
     subscribe("settings", data.settings);
-    for (const key of ["years", "beds", "varieties", "plants", "logs", "activity"]) subscribe(key, []);
+    for (const key of ["years", "beds", "seeds", "plants", "logs", "yearUpdates", "activity"]) subscribe(key, []);
   });
 } else {
   queueMicrotask(() => event("config", { configured: false }));
@@ -227,32 +228,11 @@ window.SproutStore = {
     return commitDocument("beds", item, { activity: existing ? "updated bed" : "added bed" });
   },
 
-  deleteBed: async (bed) => {
-    const plants = data.plants.filter((plant) => plant.bedId === bed.id);
-    const archivedPlants = plants.map((plant) => ({
-      ...plant,
-      archived: true,
-      status: "removed",
-      removedAt: now(),
-      updatedAt: now(),
-      ...actor(),
-    }));
-    const operations = [
-      { key: "beds", item: bed, remove: true },
-      ...archivedPlants.map((plant) => ({ key: "plants", item: plant })),
-    ];
-    await commitMany(operations, activityEntry("deleted bed", bed, {
-      removedPlants: plants.length,
-      undo: { operations: [
-        { key: "beds", kind: "set", item: bed },
-        ...plants.map((plant) => ({ key: "plants", kind: "set", item: plant })),
-      ] },
-    }));
-  },
+  deleteBed: async (bed) => commitDocument("beds", bed, { remove: true, activity: "deleted bed" }),
 
-  saveVariety: (input) => {
+  saveSeed: (input) => {
     const normalized = String(input.commonName || "").trim().toLowerCase();
-    const existing = data.varieties.find((entry) => entry.id === input.id || entry.normalizedName === normalized);
+    const existing = data.seeds.find((entry) => entry.id === input.id || entry.normalizedName === normalized);
     const item = {
       ...(existing || {}),
       ...input,
@@ -263,12 +243,17 @@ window.SproutStore = {
       color: input.color || "#4f8d5b",
       sun: input.sun || "medium",
       water: input.water || "medium",
+      notes: input.notes || "",
+      plantedDate: input.plantedDate || "",
+      seedLink: input.seedLink || "",
       updatedAt: now(),
       createdAt: existing?.createdAt || now(),
       ...actor(),
     };
-    return commitDocument("varieties", item, { activity: existing ? "updated plant type" : "added plant type" });
+    return commitDocument("seeds", item, { activity: existing ? "updated seed" : "added seed" });
   },
+
+  deleteSeed: (seed) => commitDocument("seeds", seed, { remove: true, activity: "deleted seed" }),
 
   savePlant: (input) => {
     const existing = data.plants.find((entry) => entry.id === input.id);
@@ -278,15 +263,11 @@ window.SproutStore = {
       id: input.id || id(),
       subjectType: "plant",
       year: Number(input.year),
+      seedId: input.seedId || existing?.seedId,
       x: Number(input.x || 0),
       y: Number(input.y || 0),
       widthIn: Number(input.widthIn || 12),
       heightIn: Number(input.heightIn || 12),
-      commonName: String(input.commonName || "").trim(),
-      icon: input.icon || "🌱",
-      color: input.color || "#4f8d5b",
-      sun: input.sun || "medium",
-      water: input.water || "medium",
       status: input.status || "planned",
       notes: input.notes || "",
       photos: input.photos || existing?.photos || [],
@@ -296,12 +277,15 @@ window.SproutStore = {
       updatedAt: now(),
       ...actor(),
     };
-    return commitDocument("plants", item, { activity: existing ? "updated plant" : "added plant" });
+    delete item.bedId;
+    const seed = data.seeds.find((entry) => entry.id === item.seedId);
+    return commitDocument("plants", item, { activity: existing ? "updated plant" : "added plant", activityExtra: { label: seed?.commonName || "Plant" } });
   },
 
   archivePlant: (plant, archived = true) => {
     const item = { ...plant, archived, status: archived ? "removed" : "planned", removedAt: archived ? now() : null, updatedAt: now(), ...actor() };
-    return commitDocument("plants", item, { activity: archived ? "archived plant" : "restored plant" });
+    const seed = data.seeds.find((entry) => entry.id === plant.seedId);
+    return commitDocument("plants", item, { activity: archived ? "archived plant" : "restored plant", activityExtra: { label: seed?.commonName || "Plant" } });
   },
 
   deletePlant: (plant) => commitDocument("plants", plant, { remove: true, activity: "deleted plant" }),
@@ -317,9 +301,10 @@ window.SproutStore = {
       ...actor(),
     };
     const plant = data.plants.find((entry) => entry.id === input.plantId);
+    const seed = data.seeds.find((entry) => entry.id === plant?.seedId);
     return commitDocument("logs", item, {
       activity: `logged ${input.type || "note"}`,
-      activityExtra: { subjectType: "plant", subjectId: input.plantId, year: input.year, label: plant?.commonName || "Plant" },
+      activityExtra: { subjectType: "plant", subjectId: input.plantId, year: input.year, label: seed?.commonName || "Plant" },
     });
   },
 
@@ -357,23 +342,18 @@ window.SproutStore = {
     if (data.years.some((entry) => Number(entry.year) === target)) throw new Error(`${target} already exists.`);
     const sourceBeds = data.beds.filter((bed) => Number(bed.year) === source);
     const sourcePlants = data.plants.filter((plant) => Number(plant.year) === source && !plant.archived);
-    const bedMap = new Map();
     const operations = [];
     const yearItem = { id: String(target), year: target, duplicatedFrom: source, createdAt: now(), ...actor() };
     operations.push({ key: "years", item: yearItem });
     for (const bed of sourceBeds) {
-      const nextId = id();
-      bedMap.set(bed.id, nextId);
-      operations.push({ key: "beds", item: { ...bed, id: nextId, year: target, createdAt: now(), updatedAt: now(), ...actor() } });
+      operations.push({ key: "beds", item: { ...bed, id: id(), year: target, createdAt: now(), updatedAt: now(), ...actor() } });
     }
     for (const plant of sourcePlants) {
       operations.push({ key: "plants", item: {
         ...plant,
         id: id(),
         year: target,
-        bedId: bedMap.get(plant.bedId) || "",
         status: "planned",
-        plantedDate: "",
         archived: false,
         removedAt: null,
         photos: [],
@@ -387,9 +367,29 @@ window.SproutStore = {
     await commitMany(operations, activityEntry("duplicated year", null, { year: target, sourceYear: source, targetYear: target }));
   },
 
+  saveYearCover: (year, photo) => {
+    const existing = data.years.find((entry) => Number(entry.year) === Number(year));
+    const item = { ...(existing || { id: String(year), year: Number(year), createdAt: now() }), coverPhoto: photo, updatedAt: now(), ...actor() };
+    return commitDocument("years", item, { activity: "updated year cover photo" });
+  },
+
+  addYearUpdate: (input) => {
+    const item = {
+      id: id(),
+      year: Number(input.year),
+      date: input.date || new Date().toISOString().slice(0, 10),
+      text: String(input.text || "").trim(),
+      createdAt: now(),
+      ...actor(),
+    };
+    return commitDocument("yearUpdates", item, { activity: "added year update", activityExtra: { subjectType: "year", year: input.year, label: `${input.year} update` } });
+  },
+
+  deleteYearUpdate: (entry) => commitDocument("yearUpdates", entry, { remove: true, activity: "deleted year update" }),
+
   importBackup: async (payload) => {
     requireUser();
-    const collections = ["years", "beds", "varieties", "plants", "logs", "activity"];
+    const collections = ["years", "beds", "seeds", "plants", "logs", "yearUpdates", "activity"];
     const operations = [];
     for (const key of collections) {
       for (const item of Array.isArray(payload[key]) ? payload[key] : []) {
