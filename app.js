@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=48";
+import "./firebase-client.js?v=49";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1202,10 +1202,29 @@ function bindMap() {
 
   const pointers = new Map();
   let interaction = null;
+  let inertiaRAF = null;
   const point = (event) => ({ x: event.clientX, y: event.clientY });
   const findItem = (kind, itemId) => (kind === "bed" ? state.data.beds.find((entry) => entry.id === itemId) : state.data.plants.find((entry) => entry.id === itemId));
+  const stopInertia = () => { if (inertiaRAF) { cancelAnimationFrame(inertiaRAF); inertiaRAF = null; } };
+  const runInertia = (vx, vy) => {
+    let lastT = performance.now();
+    const step = (now) => {
+      if (!world.isConnected) { inertiaRAF = null; return; }
+      const dt = Math.min(48, now - lastT);
+      lastT = now;
+      const decay = Math.pow(0.94, dt / 16.67);
+      vx *= decay; vy *= decay;
+      state.map.panX += vx * dt;
+      state.map.panY += vy * dt;
+      apply();
+      if (Math.hypot(vx, vy) > 0.02) inertiaRAF = requestAnimationFrame(step);
+      else inertiaRAF = null;
+    };
+    inertiaRAF = requestAnimationFrame(step);
+  };
   viewport.onpointerdown = (event) => {
     if (event.target.closest(".selection-card,button,input,select,textarea,label")) return;
+    stopInertia();
     pointers.set(event.pointerId, point(event));
     viewport.setPointerCapture(event.pointerId);
     if (pointers.size === 2) {
@@ -1294,6 +1313,17 @@ function bindMap() {
       state.map.panX = interaction.originalX + dx;
       state.map.panY = interaction.originalY + dy;
       apply();
+      const now = performance.now();
+      if (interaction.lastT != null) {
+        const dt = now - interaction.lastT;
+        if (dt > 0) {
+          interaction.vx = (event.clientX - interaction.lastX) / dt;
+          interaction.vy = (event.clientY - interaction.lastY) / dt;
+        }
+      }
+      interaction.lastT = now;
+      interaction.lastX = event.clientX;
+      interaction.lastY = event.clientY;
       return;
     }
     if (interaction.type.startsWith("resize-")) {
@@ -1374,6 +1404,8 @@ function bindMap() {
       render();
     } else if (interaction?.type === "pan" && !interaction.moved) {
       state.selected = interaction.selectTarget || null; render();
+    } else if (interaction?.type === "pan" && interaction.moved && (Math.abs(interaction.vx) > 0.05 || Math.abs(interaction.vy) > 0.05)) {
+      runInertia(interaction.vx || 0, interaction.vy || 0);
     }
     interaction = null;
   };

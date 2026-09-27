@@ -1,4 +1,4 @@
-const VERSION = "sprout-shell-v48";
+const VERSION = "sprout-shell-v49";
 const SHELL = [
   "./",
   "./index.html",
