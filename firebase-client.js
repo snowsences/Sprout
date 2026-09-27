@@ -42,6 +42,7 @@ let data = {
   weather: [],
   activity: [],
   fromCache: false,
+  yearsLoaded: false,
 };
 
 const emit = () => {
@@ -92,6 +93,7 @@ async function commitDocument(key, item, options = {}) {
   const beforeItem = previous.find((entry) => entry.id === item.id);
   const batch = writeBatch(db);
   if (options.remove) batch.delete(doc(refs[key], item.id));
+  else if (options.merge) batch.set(doc(refs[key], item.id), item, { merge: true });
   else batch.set(doc(refs[key], item.id), item);
   if (options.activity) {
     const undo = options.remove
@@ -151,8 +153,8 @@ function subscribe(key, fallback) {
           [key]: snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
           fromCache: snapshot.metadata.fromCache,
         };
+        if (key === "years") data.yearsLoaded = true;
       }
-      if (key === "years") console.log("[debug] years snapshot", { fromCache: snapshot.metadata.fromCache, years: data.years });
       emit();
       if (key === "activity" && !snapshot.metadata.fromCache) pruneActivity();
     },
@@ -247,7 +249,10 @@ window.SproutStore = {
     const numeric = Number(year);
     if (data.years.some((entry) => Number(entry.year) === numeric)) return;
     const item = { id: String(numeric), year: numeric, createdAt: now(), ...actor() };
-    return commitDocument("years", item, { activity: "created year" });
+    // merge:true because this can race Firestore's initial snapshot on load (years
+    // still empty locally) even when the document already exists on the server --
+    // a plain set() would silently wipe fields like coverPhoto on every reload.
+    return commitDocument("years", item, { activity: "created year", merge: true });
   },
 
   saveBed: (input) => {
@@ -412,11 +417,7 @@ window.SproutStore = {
   saveYearCover: (year, photo) => {
     const existing = data.years.find((entry) => Number(entry.year) === Number(year));
     const item = { ...(existing || { id: String(year), year: Number(year), createdAt: now() }), coverPhoto: photo, updatedAt: now(), ...actor() };
-    console.log("[debug] saveYearCover", { year, existing, item });
-    return commitDocument("years", item, { activity: "updated year cover photo" }).then((saved) => {
-      console.log("[debug] saveYearCover committed", saved);
-      return saved;
-    });
+    return commitDocument("years", item, { activity: "updated year cover photo" });
   },
 
   addYearUpdate: (input) => {

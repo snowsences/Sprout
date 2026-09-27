@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=50";
+import "./firebase-client.js?v=51";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -937,7 +937,7 @@ function closeModal() {
 }
 
 async function ensureInitialYear() {
-  if (!state.user || ensuringInitialYear) return;
+  if (!state.user || ensuringInitialYear || !state.data.yearsLoaded) return;
   const active = Number(state.data.settings.activeYear || CURRENT_YEAR);
   if (!state.data.years.some((item) => Number(item.year) === active)) {
     ensuringInitialYear = true;
