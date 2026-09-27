@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=53";
+import "./firebase-client.js?v=54";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -810,6 +810,13 @@ function renderBedModal(bed) {
   return modalShell("Edit Bed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-bed">Save</button>`);
 }
 
+function seedSuggestItems(query) {
+  const seeds = [...state.data.seeds].sort((a, b) => a.commonName.localeCompare(b.commonName));
+  const trimmedQuery = (query || "").trim().toLowerCase();
+  const matches = trimmedQuery ? seeds.filter((seed) => seed.commonName.toLowerCase().includes(trimmedQuery)) : seeds;
+  return matches.length ? matches.map((seed) => `<button type="button" class="seed-suggest-item" data-action="select-seed-suggestion" data-id="${seed.id}"><span class="seed-suggest-avatar">${seedAvatarInner(seed)}</span><span>${esc(seed.commonName)}</span></button>`).join("") : '<div class="seed-suggest-empty">No matching seeds</div>';
+}
+
 function renderPlantModal(plant) {
   const initial = plant || {};
   const sizeW = splitInches(initial.widthIn || 12);
@@ -818,9 +825,7 @@ function renderPlantModal(plant) {
   const selectedSeedId = state.modal.seedId !== undefined ? state.modal.seedId : (initial.seedId || "");
   const selectedSeed = seeds.find((seed) => seed.id === selectedSeedId);
   const query = state.modal.seedQuery ?? (selectedSeed?.commonName || "");
-  const trimmedQuery = query.trim().toLowerCase();
-  const matches = trimmedQuery ? seeds.filter((seed) => seed.commonName.toLowerCase().includes(trimmedQuery)) : seeds;
-  const suggestList = state.modal.seedSuggestOpen ? `<div class="seed-suggest-list">${matches.length ? matches.map((seed) => `<button type="button" class="seed-suggest-item" data-action="select-seed-suggestion" data-id="${seed.id}"><span class="seed-suggest-avatar">${seedAvatarInner(seed)}</span><span>${esc(seed.commonName)}</span></button>`).join("") : '<div class="seed-suggest-empty">No matching seeds</div>'}</div>` : "";
+  const suggestList = state.modal.seedSuggestOpen ? `<div class="seed-suggest-list">${seedSuggestItems(query)}</div>` : "";
   const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><input type="hidden" name="seedId" value="${esc(selectedSeedId)}"><label class="field full seed-typeahead"><span>Seed</span><input type="text" data-seed-search autocomplete="off" placeholder="Search your seeds…" value="${esc(query)}" required>${suggestList}${!selectedSeed ? '<small class="form-note">Type to search, then tap a seed to select it.</small>' : ""}</label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Anything specific to this planting…">${esc(initial.notes || "")}</textarea></label></form>`;
   const archive = plant ? `<button class="${plant.archived ? "secondary-button" : "danger-button"}" data-action="archive-plant" data-id="${plant.id}">${plant.archived ? "Restore" : "Archive"}</button>` : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
   return modalShell(plant ? `Edit ${seedFor(plant).commonName || "Plant"}` : "Add a Plant", body, `${archive}<button class="primary-button" type="button" data-action="save-plant">Save</button>`, true);
@@ -1678,13 +1683,32 @@ document.addEventListener("input", (event) => {
     state.modal.seedQuery = event.target.value;
     state.modal.seedId = "";
     state.modal.seedSuggestOpen = true;
-    const position = event.target.selectionStart;
-    render();
-    requestAnimationFrame(() => {
-      const input = $("[data-seed-search]");
-      input?.focus();
-      input?.setSelectionRange(position, position);
-    });
+    const label = event.target.closest(".seed-typeahead");
+    if (label) {
+      const hiddenSeedId = $("[name=seedId]");
+      if (hiddenSeedId) hiddenSeedId.value = "";
+      let list = label.querySelector(".seed-suggest-list");
+      if (!list) {
+        list = document.createElement("div");
+        list.className = "seed-suggest-list";
+        event.target.insertAdjacentElement("afterend", list);
+      }
+      list.innerHTML = seedSuggestItems(state.modal.seedQuery);
+      if (!label.querySelector(".form-note")) {
+        const note = document.createElement("small");
+        note.className = "form-note";
+        note.textContent = "Type to search, then tap a seed to select it.";
+        label.appendChild(note);
+      }
+    } else {
+      const position = event.target.selectionStart;
+      render();
+      requestAnimationFrame(() => {
+        const input = $("[data-seed-search]");
+        input?.focus();
+        input?.setSelectionRange(position, position);
+      });
+    }
   }
 });
 
