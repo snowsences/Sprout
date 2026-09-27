@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=58";
+import "./firebase-client.js?v=59";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -399,7 +399,7 @@ function renderGarden() {
       <div class="map-viewport" aria-label="Garden plan">
         <div class="garden-world ${readOnly ? "readonly" : ""} ${state.mode !== "layout" ? "beds-inert" : ""} ${state.mode === "layout" ? "layout-mode" : ""}" style="width:${settings.widthIn * PX_PER_INCH * (state.map.zoom || 1)}px;height:${settings.heightIn * PX_PER_INCH * (state.map.zoom || 1)}px;background-size:${settings.gridIn * PX_PER_INCH * (state.map.zoom || 1)}px ${settings.gridIn * PX_PER_INCH * (state.map.zoom || 1)}px">
           ${beds.map((bed) => renderBed(bed, PX_PER_INCH * (state.map.zoom || 1))).join("")}
-          ${plants.map((plant) => renderPlantMarker(plant, PX_PER_INCH * (state.map.zoom || 1))).join("")}
+          ${plants.map((plant) => renderPlantMarker(plant, PX_PER_INCH * (state.map.zoom || 1), plants)).join("")}
         </div>
         ${!beds.length && !plants.length ? `<div class="map-empty"><h2>${readOnly ? "No beds in this snapshot" : "Start planning your garden"}</h2><p>${readOnly ? "This year does not contain a saved layout." : "Copy a bed from another year (⌘/Ctrl+C) and paste it here (⌘/Ctrl+V) to get started, or add seeds and place plants anywhere on the grid."}</p></div>` : ""}
         ${selectedPlant ? renderSelectionPlant(selectedPlant) : selectedBed ? renderSelectionBed(selectedBed) : ""}
@@ -424,11 +424,29 @@ function renderBed(bed, scale) {
   </div>`;
 }
 
-function renderPlantMarker(plant, scale) {
+function plantEdgeInsets(plant, allPlants) {
+  const EPS = 0.01;
+  const left = plant.x, right = plant.x + plant.widthIn, top = plant.y, bottom = plant.y + plant.heightIn;
+  const insets = { top: 7.5, right: 7.5, bottom: 7.5, left: 7.5 };
+  for (const other of allPlants) {
+    if (other.id === plant.id) continue;
+    const oLeft = other.x, oRight = other.x + other.widthIn, oTop = other.y, oBottom = other.y + other.heightIn;
+    const vOverlap = Math.min(bottom, oBottom) - Math.max(top, oTop) > EPS;
+    const hOverlap = Math.min(right, oRight) - Math.max(left, oLeft) > EPS;
+    if (vOverlap && Math.abs(left - oRight) < EPS) insets.left = 0;
+    if (vOverlap && Math.abs(right - oLeft) < EPS) insets.right = 0;
+    if (hOverlap && Math.abs(top - oBottom) < EPS) insets.top = 0;
+    if (hOverlap && Math.abs(bottom - oTop) < EPS) insets.bottom = 0;
+  }
+  return insets;
+}
+
+function renderPlantMarker(plant, scale, allPlants) {
   const seed = seedFor(plant);
   const selected = state.selected?.type === "plant" && state.selected.id === plant.id;
   const showHandles = !yearIsReadOnly() && state.mode === "plants" && selected;
-  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="left:${plant.x * scale}px;top:${plant.y * scale}px;width:${plant.widthIn * scale}px;height:${plant.heightIn * scale}px"><div class="plant-visual" style="--plant-color:${esc(seed.color || "#4f8d5b")}"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span></div>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
+  const insets = plantEdgeInsets(plant, allPlants);
+  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="left:${plant.x * scale}px;top:${plant.y * scale}px;width:${plant.widthIn * scale}px;height:${plant.heightIn * scale}px"><div class="plant-visual" style="--plant-color:${esc(seed.color || "#4f8d5b")};inset:${insets.top}% ${insets.right}% ${insets.bottom}% ${insets.left}%"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span></div>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
 }
 
 function renderSelectionPlant(plant) {
