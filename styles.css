@@ -33,7 +33,6 @@ h1,h2,h3,h4,p{margin-top:0}
 h1,h2,h3,strong{font-weight:500}
 .hidden{display:none!important}
 .app-shell{height:100%;display:grid;grid-template-rows:64px auto minmax(0,1fr) 72px;background:var(--paper)}
-.banner-slot:empty{display:none}
 .month-banner{display:block;width:100%;padding:12px 20px;background:var(--green);color:#fff;font-weight:500;text-align:center;border-radius:0}
 .topbar{display:flex;align-items:center;gap:18px;padding:max(10px,env(safe-area-inset-top)) 20px 10px;border-bottom:1px solid var(--line);background:rgba(255,253,247,.94);backdrop-filter:blur(14px);z-index:30}
 .brand{display:flex;align-items:center;gap:10px;min-width:170px}
