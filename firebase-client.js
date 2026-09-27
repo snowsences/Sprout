@@ -6,6 +6,8 @@ import {
   browserPopupRedirectResolver,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   onAuthStateChanged,
   signOut,
 } from "./vendor/firebase-auth.js";
@@ -23,6 +25,7 @@ import { FIREBASE_CONFIG, SPROUT_CONFIG } from "./config.js";
 
 const configured = !Object.values(FIREBASE_CONFIG).some((value) => String(value).startsWith("PASTE_"));
 const event = (name, detail) => window.dispatchEvent(new CustomEvent(`sprout:${name}`, { detail }));
+const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
 let auth = null;
 let db = null;
@@ -168,6 +171,8 @@ if (configured) {
     refs[key] = collection(db, ...base, key);
   }
 
+  getRedirectResult(auth).catch(() => event("error", "Sign-in failed. Please try again."));
+
   onAuthStateChanged(auth, (user) => {
     stops.forEach((stop) => stop());
     stops = [];
@@ -197,7 +202,8 @@ window.SproutStore = {
   getIdToken: () => auth?.currentUser?.getIdToken(),
   signIn: () => {
     if (!configured) throw new Error("Add the new Firebase project values to config.js first.");
-    return signInWithPopup(auth, new GoogleAuthProvider());
+    const provider = new GoogleAuthProvider();
+    return isStandalone ? signInWithRedirect(auth, provider) : signInWithPopup(auth, provider);
   },
   signOut: () => signOut(auth),
   getData: () => data,
