@@ -55,6 +55,10 @@ const plantsForYear = () => state.data.plants.filter((plant) => Number(plant.yea
 const seedById = (id) => state.data.seeds.find((seed) => seed.id === id);
 const seedFor = (plant) => seedById(plant?.seedId) || {};
 const plantsForSeedThisYear = (seedId) => state.data.plants.filter((plant) => plant.seedId === seedId && Number(plant.year) === Number(state.year) && !plant.archived);
+const lastPlantedYear = (seedId) => {
+  const years = state.data.plants.filter((plant) => plant.seedId === seedId).map((plant) => Number(plant.year));
+  return years.length ? Math.max(...years) : null;
+};
 const categoryById = (id) => PLANT_CATEGORIES.find((category) => category.id === id);
 const categoryForSeed = (seed = {}) => {
   if (categoryById(seed.category)) return seed.category;
@@ -549,11 +553,17 @@ function renderSeeds() {
   const seeds = [...state.data.seeds]
     .filter((seed) => state.seedCategory === "all" || categoryForSeed(seed) === state.seedCategory)
     .filter((seed) => !query || seed.commonName.toLowerCase().includes(query) || seed.notes?.toLowerCase().includes(query))
-    .sort((a, b) => a.commonName.localeCompare(b.commonName));
-  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1><p>${seeds.length} shown</p></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
+    .sort((a, b) => {
+      const yearDiff = (lastPlantedYear(b.id) || 0) - (lastPlantedYear(a.id) || 0);
+      if (yearDiff) return yearDiff;
+      const categoryDiff = categoryById(categoryForSeed(a)).label.localeCompare(categoryById(categoryForSeed(b)).label);
+      if (categoryDiff) return categoryDiff;
+      return a.commonName.localeCompare(b.commonName);
+    });
+  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search seeds" value="${esc(state.search)}"></label></div>
     <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
-    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const dates = categoryDatesFor(categoryForSeed(seed)); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}</h3><p>${title(categoryForSeed(seed))}${dates.plantDate ? ` · ${monthDayLabel(dates.plantDate)}` : ""}</p></span><span class="status-pill">${activeCount} planted</span></button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
+    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
   </section>`;
 }
 
