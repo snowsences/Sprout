@@ -172,7 +172,6 @@ function render() {
         ${navButton("garden", "Garden", "garden")}
         ${navButton("year", String(state.year), "calendar")}
         ${navButton("seeds", "Seeds", "seeds")}
-        ${navButton("activity", "Activity", "activity")}
         ${navButton("settings", "Settings", "settings")}
       </nav>
     </div>
@@ -201,7 +200,6 @@ function renderPage() {
   if (state.tab === "garden") return renderGarden();
   if (state.tab === "year") return renderYearTab();
   if (state.tab === "seeds") return renderSeeds();
-  if (state.tab === "activity") return renderActivity();
   return renderSettings();
 }
 
@@ -349,17 +347,22 @@ function categoryEventsForYear(year) {
 function renderCalendar(year) {
   const events = categoryEventsForYear(year);
   if (!events.length) return `<div class="empty-state">No planting dates yet. Set Plant Dates for your categories from the gear icon on the Seeds tab.</div>`;
-  let lastMonth = "";
-  const rows = events.map((event) => {
-    const date = new Date(`${year}-${event.mmdd}T12:00:00`);
-    const monthLabel = new Intl.DateTimeFormat(undefined, { month: "long" }).format(date);
-    const dayLabel = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(date);
-    const category = categoryById(event.categoryId);
-    const header = monthLabel !== lastMonth ? `<h3 class="cal-month">${monthLabel}</h3>` : "";
-    lastMonth = monthLabel;
-    return `${header}<article class="cal-row"><div class="cal-date">${dayLabel}</div><div class="cal-icon">${category?.icon || "🌱"}</div><div class="cal-desc"><strong>${event.eventType === "plant" ? "Plant Date" : "Start Indoors"}: ${esc(category?.label || "Other")}</strong><small>${esc([...event.names].join(", "))}</small></div></article>`;
+  const groups = new Map();
+  for (const event of events) {
+    const month = Number(event.mmdd.slice(0, 2));
+    if (!groups.has(month)) groups.set(month, []);
+    groups.get(month).push(event);
+  }
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([month, monthEvents]) => {
+    const rows = monthEvents.map((event) => {
+      const date = new Date(`${year}-${event.mmdd}T12:00:00`);
+      const dayLabel = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(date);
+      const category = categoryById(event.categoryId);
+      const title = `${event.eventType === "plant" ? "Plant Date" : "Start Indoors"}: ${esc(category?.label || "Other")}`;
+      return `<div class="plant-row cal-card"><span class="plant-avatar cal-avatar">${category?.icon || "🌱"}</span><span class="plant-main"><h3>${title}</h3><p>${esc([...event.names].join(", "))}</p></span><span class="status-pill">${dayLabel}</span></div>`;
+    }).join("");
+    return `<h3 class="cal-month">${monthLabel(month)}</h3><div class="plant-list">${rows}</div>`;
   }).join("");
-  return `<div class="calendar-list">${rows}</div>`;
 }
 
 function monthlyWeatherStats(weather) {
@@ -563,13 +566,13 @@ function renderSeeds() {
   return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search seeds" value="${esc(state.search)}"></label></div>
     <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
-    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
+    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}${seed.rating ? ` <span class="seed-rating">${"⭐".repeat(seed.rating)}</span>` : ""}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
   </section>`;
 }
 
-function renderActivity() {
+function renderActivityCard() {
   const entries = [...state.data.activity].filter((entry) => Number(entry.year) === Number(state.year)).sort((a, b) => b.createdAt - a.createdAt);
-  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Activity</h1><p>Everything changed in ${state.year}, and who changed it.</p></div></div><div class="activity-list">${entries.length ? entries.map((entry, index) => `<div class="activity-row"><div class="activity-badge">${entry.subjectType === "plant" ? "🌱" : entry.subjectType === "bed" ? "▦" : "✓"}</div><div><p><strong>${esc(entry.actorName || entry.actorEmail || "Someone")}</strong> ${esc(entry.action)}${entry.label && entry.label !== "Sprout" ? ` <strong>${esc(entry.label)}</strong>` : ""}${entry.undoneAt ? " <em>(undone)</em>" : ""}</p><p class="activity-meta">${entry.sourceYear ? `Copied ${entry.sourceYear} into ${entry.targetYear}` : esc(entry.actorEmail || "")}</p></div><span class="activity-time">${dateText(entry.createdAt)}${index === 0 && !yearIsReadOnly() && entry.undo?.operations?.length && !entry.undoneAt ? `<button class="text-button" data-action="undo-activity" data-id="${entry.id}">Undo</button>` : ""}</span></div>`).join("") : '<div class="empty-state">No activity has been recorded for this year yet.</div>'}</div></section>`;
+  return `<section class="settings-card wide"><h2>Activity</h2><p>Everything changed in ${state.year}, and who changed it.</p><div class="activity-list">${entries.length ? entries.map((entry, index) => `<div class="activity-row"><div class="activity-badge">${entry.subjectType === "plant" ? "🌱" : entry.subjectType === "bed" ? "▦" : "✓"}</div><div><p><strong>${esc(entry.actorName || entry.actorEmail || "Someone")}</strong> ${esc(entry.action)}${entry.label && entry.label !== "Sprout" ? ` <strong>${esc(entry.label)}</strong>` : ""}${entry.undoneAt ? " <em>(undone)</em>" : ""}</p><p class="activity-meta">${entry.sourceYear ? `Copied ${entry.sourceYear} into ${entry.targetYear}` : esc(entry.actorEmail || "")}</p></div><span class="activity-time">${dateText(entry.createdAt)}${index === 0 && !yearIsReadOnly() && entry.undo?.operations?.length && !entry.undoneAt ? `<button class="text-button" data-action="undo-activity" data-id="${entry.id}">Undo</button>` : ""}</span></div>`).join("") : '<div class="empty-state">No activity has been recorded for this year yet.</div>'}</div></section>`;
 }
 
 function renderSettings() {
@@ -582,6 +585,7 @@ function renderSettings() {
     <section class="settings-card wide"><h2>Years</h2><p>The active year can be edited. Older years remain read-only snapshots.</p><div class="button-row">${years.map((year) => `<button class="secondary-button" data-action="view-year" data-year="${year.year}">${year.year}${Number(year.year) === Number(state.data.settings.activeYear) ? " · Active" : ""}</button>`).join("")}<button class="primary-button" data-action="duplicate-year">Duplicate a year</button></div></section>
     <section class="settings-card"><h2>Backup</h2><p>Download all Sprout data as JSON, or merge a previous backup into Firestore.</p><div class="button-row"><button class="secondary-button" data-action="export">${icon("download")} Export</button><button class="secondary-button" data-action="import">${icon("upload")} Import</button></div></section>
     <section class="settings-card"><h2>Connections</h2><p>Firebase: <strong>${window.SproutStore.configured ? "Configured" : "Needs setup"}</strong><br>Photos: <strong>${SPROUT_CONFIG.cloudinaryWorkerUrl.startsWith("PASTE_") ? "Worker URL needed" : "Configured"}</strong></p><p>Photo uploads are resized in the browser to 1500px and kept below about 3.5MB.</p></section>
+    ${renderActivityCard()}
   </div></section>`;
 }
 
@@ -635,7 +639,7 @@ function renderSeedModal(seed) {
   const selectedCategory = initial.category || initial.icon ? categoryForSeed(initial) : PLANT_CATEGORIES[0].id;
   const selectedIcon = categoryById(selectedCategory).icon;
   const selectedColor = initial.color || COLORS[0];
-  const body = `<form id="seed-form" class="form-grid"><input type="hidden" name="id" value="${seed?.id || ""}"><label class="field full"><span>Common name</span><input id="seed-name" name="commonName" value="${esc(commonName)}" maxlength="80" autocomplete="off" required></label><label class="field full"><span>Category</span><div class="choice-row plant-category-choices">${PLANT_CATEGORIES.map((category) => `<button type="button" class="choice plant-category-choice ${category.id === selectedCategory ? "selected" : ""}" data-field-choice="category" data-value="${category.id}" data-icon="${category.icon}"><span>${category.icon}</span><small>${category.label}</small></button>`).join("")}</div><input type="hidden" name="category" value="${selectedCategory}"><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label><label class="field full"><span>Seed link</span><input name="seedLink" type="url" placeholder="https://…" value="${esc(initial.seedLink || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
+  const body = `<form id="seed-form" class="form-grid"><input type="hidden" name="id" value="${seed?.id || ""}"><label class="field full"><span>Common name</span><input id="seed-name" name="commonName" value="${esc(commonName)}" maxlength="80" autocomplete="off" required></label><label class="field full"><span>Category</span><div class="choice-row plant-category-choices">${PLANT_CATEGORIES.map((category) => `<button type="button" class="choice plant-category-choice ${category.id === selectedCategory ? "selected" : ""}" data-field-choice="category" data-value="${category.id}" data-icon="${category.icon}"><span>${category.icon}</span><small>${category.label}</small></button>`).join("")}</div><input type="hidden" name="category" value="${selectedCategory}"><input type="hidden" name="icon" value="${esc(selectedIcon)}"></label><label class="field full"><span>Colour</span><div class="choice-row">${COLORS.map((item) => `<button type="button" class="color-choice ${item === selectedColor ? "selected" : ""}" style="--choice-color:${item}" data-field-choice="color" data-value="${item}" aria-label="${item}"></button>`).join("")}</div><input type="hidden" name="color" value="${selectedColor}"></label><label class="field full"><span>Rating</span><div class="rating-stars">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rating-star ${initial.rating && n <= initial.rating ? "selected" : ""}" data-rating-choice data-seed="self" data-value="${n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}</div><input type="hidden" name="rating-self" value="${initial.rating || ""}"></label><label class="field full"><span>Seed link</span><input name="seedLink" type="url" placeholder="https://…" value="${esc(initial.seedLink || "")}"></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Care details, source, or anything useful…">${esc(initial.notes || "")}</textarea></label></form>`;
   const deleteButton = seed ? '<button class="danger-button" data-action="delete-seed" data-id="'+seed.id+'">Delete seed</button>' : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
   return modalShell(seed ? `Edit ${seed.commonName}` : "Add a Seed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-seed">Save</button>`, true);
 }
@@ -807,7 +811,8 @@ async function saveSeed(form) {
   const commonName = String(values.get("commonName") || "").trim();
   const category = categoryById(values.get("category"))?.id || "greens";
   const seedIcon = categoryById(category).icon;
-  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), seedLink: values.get("seedLink"), notes: values.get("notes") };
+  const rating = values.get("rating-self");
+  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), rating: rating ? Number(rating) : null, seedLink: values.get("seedLink"), notes: values.get("notes") };
   const saved = await window.SproutStore.saveSeed(seed);
   state.modal = { type: "seedDetails", id: saved.id };
   render();

@@ -260,6 +260,7 @@ window.SproutStore = {
       color: input.color || "#4f8d5b",
       notes: input.notes || "",
       seedLink: input.seedLink || "",
+      rating: input.rating ?? existing?.rating ?? null,
       updatedAt: now(),
       createdAt: existing?.createdAt || now(),
       ...actor(),
