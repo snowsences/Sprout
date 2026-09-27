@@ -74,13 +74,14 @@ h1,h2,h3,strong{font-weight:500}
 .bed-wrap{position:absolute;touch-action:none}
 .bed{position:absolute;inset:0;border:3px solid #694d37;border-radius:16px;background:repeating-linear-gradient(135deg,#a98969 0,#a98969 13px,#a38262 13px,#a38262 26px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18),0 3px 8px rgba(63,43,27,.2);overflow:hidden;touch-action:none}
 .bed.selected{outline:3px solid #fff;box-shadow:0 0 0 6px var(--green),inset 0 0 0 2px rgba(255,255,255,.18)}
-.plant-marker{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;border:2px solid rgba(18,51,29,.45);border-radius:8px;background:var(--plant-color,#5f9f65);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22),0 2px 5px rgba(32,45,31,.25);touch-action:none;user-select:none}
+.plant-marker{position:absolute;touch-action:none;user-select:none}
+.plant-visual{position:absolute;inset:5%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;border:2px solid rgba(18,51,29,.45);border-radius:8px;background:var(--plant-color,#5f9f65);box-shadow:inset 0 0 0 2px rgba(255,255,255,.22),0 2px 5px rgba(32,45,31,.25);pointer-events:none}
 .resize-handle{position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--ink);box-shadow:0 1px 4px rgba(20,30,22,.35);z-index:6;touch-action:none}
 .rh-nw{left:0;top:0;transform:translate(-50%,-50%);cursor:nwse-resize}
 .rh-ne{left:100%;top:0;transform:translate(-50%,-50%);cursor:nesw-resize}
 .rh-sw{left:0;top:100%;transform:translate(-50%,-50%);cursor:nesw-resize}
 .rh-se{left:100%;top:100%;transform:translate(-50%,-50%);cursor:nwse-resize}
-.plant-marker.selected{outline:3px solid #fff;box-shadow:0 0 0 6px var(--green-dark),inset 0 0 0 2px rgba(255,255,255,.22)}
+.plant-marker.selected .plant-visual{outline:3px solid #fff;box-shadow:0 0 0 6px var(--green-dark),inset 0 0 0 2px rgba(255,255,255,.22)}
 .plant-icon{font-size:20px;line-height:1;filter:drop-shadow(0 1px 1px rgba(255,255,255,.55));pointer-events:none}
 .plant-label{position:static;max-width:100%;padding:0;background:none;color:#fff;font-size:12px;line-height:1.1;font-weight:500;text-align:center;white-space:normal;word-break:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-shadow:0 1px 2px rgba(18,40,24,.55);pointer-events:none}
 .year-card{height:100%;display:flex;flex-direction:column;overflow-y:auto;background:var(--surface)}
@@ -306,9 +307,9 @@ button:not(:disabled):active,.nav-item:active,.plant-row:active,.choice:active,.
 
 /* Save success flash */
 .save-flash{position:fixed;inset:0;z-index:250;display:grid;place-items:center;pointer-events:none}
-.save-flash-badge{width:60px;height:60px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;box-shadow:0 12px 30px rgba(29,77,49,.35);animation:save-flash-pop .6s cubic-bezier(.34,1.56,.64,1) forwards}
+.save-flash-badge{width:60px;height:60px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;box-shadow:0 12px 30px rgba(29,77,49,.35);animation:save-flash-pop 1s cubic-bezier(.34,1.56,.64,1) forwards}
 .save-flash-badge svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;animation:save-flash-draw .35s ease-out .15s forwards}
-@keyframes save-flash-pop{0%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.08)}65%{transform:scale(1)}85%{opacity:1}100%{opacity:0;transform:scale(1)}}
+@keyframes save-flash-pop{0%{opacity:0;transform:scale(.4)}15%{opacity:1;transform:scale(1.08)}25%{transform:scale(1)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
 @keyframes save-flash-draw{to{stroke-dashoffset:0}}
 
 /* Harvest confetti */

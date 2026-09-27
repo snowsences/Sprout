@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=56";
+import "./firebase-client.js?v=57";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -197,7 +197,7 @@ function saveFlash() {
   node.className = "save-flash";
   node.innerHTML = `<span class="save-flash-badge">${icon("check")}</span>`;
   document.body.append(node);
-  setTimeout(() => node.remove(), 650);
+  setTimeout(() => node.remove(), 1050);
 }
 
 function confettiBurst() {
@@ -287,7 +287,35 @@ function render() {
   `;
   $$(".tab-page, .year-pane").forEach((el, index) => { if (scrollTops[index] != null) el.scrollTop = scrollTops[index]; });
   if (state.tab === "garden") requestAnimationFrame(bindMap);
+  syncOverlayHistory();
 }
+
+let overlayHistoryDepth = 0;
+let ignorePopstates = 0;
+
+function overlayDepth() {
+  return (state.selected ? 1 : 0) + (state.modal ? 1 : 0);
+}
+
+function syncOverlayHistory() {
+  const depth = overlayDepth();
+  if (depth === overlayHistoryDepth) return;
+  if (depth > overlayHistoryDepth) {
+    for (let i = overlayHistoryDepth; i < depth; i++) history.pushState({ sproutOverlay: i + 1 }, "");
+  } else {
+    for (let i = depth; i < overlayHistoryDepth; i++) { ignorePopstates++; history.back(); }
+  }
+  overlayHistoryDepth = depth;
+}
+
+window.addEventListener("popstate", () => {
+  if (ignorePopstates > 0) { ignorePopstates--; overlayHistoryDepth = overlayDepth(); return; }
+  if (state.modal) { state.modal = null; state.modalAnim = null; }
+  else if (state.selected) { state.selected = null; }
+  else return;
+  overlayHistoryDepth = overlayDepth();
+  render();
+});
 
 function renderSignIn() {
   const configured = window.SproutStore.configured;
@@ -400,7 +428,7 @@ function renderPlantMarker(plant, scale) {
   const seed = seedFor(plant);
   const selected = state.selected?.type === "plant" && state.selected.id === plant.id;
   const showHandles = !yearIsReadOnly() && state.mode === "plants" && selected;
-  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(seed.color || "#4f8d5b")};left:${plant.x * scale}px;top:${plant.y * scale}px;width:${plant.widthIn * scale}px;height:${plant.heightIn * scale}px"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
+  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="left:${plant.x * scale}px;top:${plant.y * scale}px;width:${plant.widthIn * scale}px;height:${plant.heightIn * scale}px"><div class="plant-visual" style="--plant-color:${esc(seed.color || "#4f8d5b")}"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span></div>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
 }
 
 function renderSelectionPlant(plant) {
