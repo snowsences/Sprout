@@ -220,3 +220,76 @@ h1,h2,h3,strong{font-weight:500}
 }
 @media(max-width:380px){.nav-item{font-size:11px}.segmented button{padding:7px 8px;font-size:14px}.photo-grid{grid-template-columns:repeat(2,1fr)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Press feedback */
+button:not(:disabled):active,.nav-item:active,.plant-row:active,.choice:active,.color-choice:active,.plant-category-choice:active,.plant-category-tabs button:active,.segmented button:active,.tool-button:active,.icon-button:active,.close-button:active,.photo-delete:active,.status-pill:active{transform:scale(.96);transition:transform .12s ease-out}
+.nav-item{transition:transform .12s ease-out,color .15s ease,background-color .15s ease}
+.plant-row,.tool-button,.icon-button,.choice,.segmented button,.plant-category-tabs button,.close-button,.photo-delete,.secondary-button,.primary-button,.danger-button,.text-button{transition:transform .12s ease-out}
+
+/* List item entrance stagger */
+@keyframes item-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.plant-row,.journal-entry,.timeline-entry,.activity-row{animation:item-in .3s cubic-bezier(.22,1,.36,1) backwards}
+.plant-row:nth-child(1),.journal-entry:nth-child(1),.timeline-entry:nth-child(1),.activity-row:nth-child(1){animation-delay:0ms}
+.plant-row:nth-child(2),.journal-entry:nth-child(2),.timeline-entry:nth-child(2),.activity-row:nth-child(2){animation-delay:30ms}
+.plant-row:nth-child(3),.journal-entry:nth-child(3),.timeline-entry:nth-child(3),.activity-row:nth-child(3){animation-delay:60ms}
+.plant-row:nth-child(4),.journal-entry:nth-child(4),.timeline-entry:nth-child(4),.activity-row:nth-child(4){animation-delay:90ms}
+.plant-row:nth-child(5),.journal-entry:nth-child(5),.timeline-entry:nth-child(5),.activity-row:nth-child(5){animation-delay:120ms}
+.plant-row:nth-child(6),.journal-entry:nth-child(6),.timeline-entry:nth-child(6),.activity-row:nth-child(6){animation-delay:150ms}
+.plant-row:nth-child(7),.journal-entry:nth-child(7),.timeline-entry:nth-child(7),.activity-row:nth-child(7){animation-delay:180ms}
+.plant-row:nth-child(8),.journal-entry:nth-child(8),.timeline-entry:nth-child(8),.activity-row:nth-child(8){animation-delay:210ms}
+.plant-row:nth-child(9),.journal-entry:nth-child(9),.timeline-entry:nth-child(9),.activity-row:nth-child(9){animation-delay:240ms}
+.plant-row:nth-child(n+10),.journal-entry:nth-child(n+10),.timeline-entry:nth-child(n+10),.activity-row:nth-child(n+10){animation-delay:270ms}
+
+/* Chart bars grow in */
+.chart-col:nth-child(1){--i:0}.chart-col:nth-child(2){--i:1}.chart-col:nth-child(3){--i:2}.chart-col:nth-child(4){--i:3}
+.chart-col:nth-child(5){--i:4}.chart-col:nth-child(6){--i:5}.chart-col:nth-child(7){--i:6}.chart-col:nth-child(8){--i:7}
+.chart-col:nth-child(9){--i:8}.chart-col:nth-child(10){--i:9}.chart-col:nth-child(11){--i:10}.chart-col:nth-child(12){--i:11}
+@keyframes bar-grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes bar-label-in{from{opacity:0}to{opacity:1}}
+.chart-bar{transform-origin:bottom;animation:bar-grow .45s cubic-bezier(.22,1,.36,1) backwards;animation-delay:calc(var(--i,0)*35ms)}
+.chart-bar-value{animation:bar-label-in .2s ease-out backwards;animation-delay:calc(var(--i,0)*35ms + .5s)}
+
+/* Empty state motion */
+@keyframes empty-sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes empty-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.empty-state::before{content:"🌱";display:block;font-size:26px;margin-bottom:8px;transform-origin:bottom center;animation:empty-sway 3s ease-in-out infinite}
+.map-empty::before{content:"🌱";display:block;font-size:30px;margin-bottom:6px;transform-origin:bottom center;animation:empty-sway 3s ease-in-out infinite}
+.year-cover-empty svg{animation:empty-breathe 3.4s ease-in-out infinite}
+
+/* Drag lift + spring settle */
+.bed-wrap,.plant-marker{transition:transform .32s cubic-bezier(.34,1.56,.64,1),box-shadow .32s cubic-bezier(.34,1.56,.64,1);z-index:5}
+.bed-wrap.item-lifted,.plant-marker.item-lifted{transition:transform .12s ease-out,box-shadow .12s ease-out;transform:scale(1.05);box-shadow:0 14px 30px rgba(20,35,22,.35);z-index:20}
+
+/* Save success flash */
+.save-flash{position:fixed;inset:0;z-index:250;display:grid;place-items:center;pointer-events:none}
+.save-flash-badge{width:60px;height:60px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;box-shadow:0 12px 30px rgba(29,77,49,.35);animation:save-flash-pop .6s cubic-bezier(.34,1.56,.64,1) forwards}
+.save-flash-badge svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;animation:save-flash-draw .35s ease-out .15s forwards}
+@keyframes save-flash-pop{0%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.08)}65%{transform:scale(1)}85%{opacity:1}100%{opacity:0;transform:scale(1)}}
+@keyframes save-flash-draw{to{stroke-dashoffset:0}}
+
+/* Harvest confetti */
+.confetti-layer{position:fixed;inset:0;z-index:250;pointer-events:none;overflow:hidden}
+.confetti-piece{position:fixed;width:7px;height:11px;border-radius:2px;opacity:0;animation:confetti-burst .85s ease-out forwards}
+@keyframes confetti-burst{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r))}}
+
+/* View Transitions: modal + tab motion */
+.modal-layer{view-transition-name:modal-layer}
+.modal{view-transition-name:modal-sheet}
+.main{view-transition-name:main-view}
+@keyframes modal-backdrop-in{from{opacity:0}}
+@keyframes modal-backdrop-out{to{opacity:0}}
+@keyframes modal-sheet-in{from{transform:translateY(32px);opacity:0}}
+@keyframes modal-sheet-out{to{transform:translateY(32px);opacity:0}}
+html[data-transition="modal-open"] ::view-transition-new(modal-layer){animation:modal-backdrop-in .28s ease-out}
+html[data-transition="modal-close"] ::view-transition-old(modal-layer){animation:modal-backdrop-out .22s ease-in forwards}
+html[data-transition="modal-open"] ::view-transition-new(modal-sheet){animation:modal-sheet-in .32s cubic-bezier(.22,1,.36,1)}
+html[data-transition="modal-close"] ::view-transition-old(modal-sheet){animation:modal-sheet-out .24s ease-in forwards}
+@keyframes tab-out-fwd{to{transform:translateX(-14px);opacity:0}}
+@keyframes tab-in-fwd{from{transform:translateX(14px);opacity:0}}
+@keyframes tab-out-back{to{transform:translateX(14px);opacity:0}}
+@keyframes tab-in-back{from{transform:translateX(-14px);opacity:0}}
+html[data-transition="tab"][data-nav-dir="fwd"] ::view-transition-old(main-view){animation:tab-out-fwd .24s ease-in forwards}
+html[data-transition="tab"][data-nav-dir="fwd"] ::view-transition-new(main-view){animation:tab-in-fwd .24s ease-out}
+html[data-transition="tab"][data-nav-dir="back"] ::view-transition-old(main-view){animation:tab-out-back .24s ease-in forwards}
+html[data-transition="tab"][data-nav-dir="back"] ::view-transition-new(main-view){animation:tab-in-back .24s ease-out}
+::view-transition-group(modal-layer),::view-transition-group(modal-sheet),::view-transition-group(main-view){animation-duration:.28s}

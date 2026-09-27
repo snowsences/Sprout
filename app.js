@@ -142,6 +142,7 @@ function icon(name) {
     download: '<path d="M12 4v12m-5-5 5 5 5-5M4 20h16"/>',
     duplicate: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    check: '<path d="m5 13 4 4L19 7"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.garden}</svg>`;
 }
@@ -159,6 +160,78 @@ function toast(message, kind = "") {
   stack.append(node);
   setTimeout(() => node.remove(), 3800);
 }
+
+const TAB_ORDER = ["garden", "year", "seeds", "settings"];
+function withTransition(kind, fn) {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion || !document.startViewTransition) { fn(); return; }
+  document.documentElement.dataset.transition = kind;
+  const transition = document.startViewTransition(() => fn());
+  transition.finished.finally(() => {
+    if (document.documentElement.dataset.transition === kind) delete document.documentElement.dataset.transition;
+  });
+}
+
+function saveFlash() {
+  const node = document.createElement("div");
+  node.className = "save-flash";
+  node.innerHTML = `<span class="save-flash-badge">${icon("check")}</span>`;
+  document.body.append(node);
+  setTimeout(() => node.remove(), 650);
+}
+
+function confettiBurst() {
+  const colors = ["#4f8d5b", "#d8a62d", "#df7435", "#c94c49", "#a95a87"];
+  const layer = document.createElement("div");
+  layer.className = "confetti-layer";
+  const originX = window.innerWidth / 2;
+  const originY = window.innerHeight * 0.35;
+  for (let index = 0; index < 22; index++) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 70 + Math.random() * 110;
+    piece.style.left = `${originX}px`;
+    piece.style.top = `${originY}px`;
+    piece.style.background = colors[index % colors.length];
+    piece.style.setProperty("--dx", `${Math.cos(angle) * distance}px`);
+    piece.style.setProperty("--dy", `${Math.sin(angle) * distance}px`);
+    piece.style.setProperty("--r", `${(Math.random() * 2 - 1) * 320}deg`);
+    piece.style.animationDelay = `${Math.random() * 90}ms`;
+    layer.append(piece);
+  }
+  document.body.append(layer);
+  setTimeout(() => layer.remove(), 1000);
+}
+
+function enableElasticScroll(selector) {
+  let active = null;
+  document.addEventListener("touchstart", (event) => {
+    const container = event.target.closest(selector);
+    if (!container) return;
+    active = { container, startY: event.touches[0].clientY };
+  }, { passive: true });
+  document.addEventListener("touchmove", (event) => {
+    if (!active || !event.touches[0]) return;
+    const { container, startY } = active;
+    const delta = event.touches[0].clientY - startY;
+    const atTop = container.scrollTop <= 0 && delta > 0;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 1 && delta < 0;
+    if (atTop || atBottom) {
+      container.style.transition = "none";
+      container.style.transform = `translateY(${clamp(delta * 0.3, -56, 56)}px)`;
+    }
+  }, { passive: true });
+  const release = () => {
+    if (!active) return;
+    active.container.style.transition = "transform .32s cubic-bezier(.17,.89,.32,1.15)";
+    active.container.style.transform = "";
+    active = null;
+  };
+  document.addEventListener("touchend", release);
+  document.addEventListener("touchcancel", release);
+}
+enableElasticScroll(".tab-page,.modal-body,.year-pane,.year-card");
 
 function render() {
   if (!state.user) {
@@ -773,8 +846,11 @@ function renderConfirmModal() {
   return modalShell(modal.title, `<p>${esc(modal.message)}</p>`, `<button class="secondary-button" data-action="close-modal">Cancel</button><button class="danger-button" data-action="confirm-action">${esc(modal.confirmLabel || "Delete")}</button>`);
 }
 
-function openModal(modal) { state.modal = modal; render(); requestAnimationFrame(() => $(".modal input:not([type=hidden]),.modal select,.modal textarea")?.focus()); }
-function closeModal() { state.modal = null; render(); }
+function openModal(modal) {
+  withTransition("modal-open", () => { state.modal = modal; render(); });
+  requestAnimationFrame(() => $(".modal input:not([type=hidden]),.modal select,.modal textarea")?.focus());
+}
+function closeModal() { withTransition("modal-close", () => { state.modal = null; render(); }); }
 
 async function ensureInitialYear() {
   if (!state.user || ensuringInitialYear) return;
@@ -828,6 +904,7 @@ async function saveBed(form) {
   state.mode = "layout";
   render();
   await saving;
+  saveFlash();
   toast(existing ? "Bed updated." : "Bed added. Drag it into place in Beds mode.");
 }
 
@@ -846,6 +923,7 @@ async function savePlant(form) {
   state.mode = "plants";
   state.selected = { type: "plant", id: saved.id };
   render();
+  saveFlash();
   toast(existing ? "Plant updated." : "Plant added. Drag it into place in Plants mode.");
 }
 
@@ -863,6 +941,7 @@ async function saveSeed(form) {
   const saved = await window.SproutStore.saveSeed(seed);
   state.modal = { type: "seedDetails", id: saved.id };
   render();
+  saveFlash();
   toast(existing ? "Seed updated." : "Seed added.");
 }
 
@@ -884,6 +963,7 @@ async function saveCategoryDates(form) {
   }
   await window.SproutStore.saveCategoryDates(map);
   closeModal();
+  saveFlash();
   toast("Category planting dates saved.");
 }
 
@@ -900,6 +980,7 @@ async function saveMonthlyUpdate(form) {
   }
   await window.SproutStore.saveMonthlyUpdate({ year, month, ratings, note: values.get("overallNote") });
   closeModal();
+  saveFlash();
   toast(`${monthLabel(month)} update saved.`);
 }
 
@@ -955,6 +1036,7 @@ async function saveYearUpdate(form) {
   await window.SproutStore.addYearUpdate({ year, date: values.get("date"), text, photo });
   state.addUpdateOpen = false;
   render();
+  saveFlash();
   toast("Update added.");
 }
 
@@ -965,14 +1047,17 @@ async function saveLog(form) {
   const file = values.get("photo");
   if (file?.size) photos = [await uploadPhoto(file, plant.id)];
   await window.SproutStore.addLog({ plantId: plant.id, year: plant.year, type: values.get("type"), note: values.get("note"), photos });
-  state.modal = { type: "details", id: plant.id }; render(); toast("Journal entry added.");
+  state.modal = { type: "details", id: plant.id }; render();
+  if (values.get("type") === "harvested") confettiBurst(); else saveFlash();
+  toast("Journal entry added.");
 }
 
 async function duplicateYear(form) {
   const values = new FormData(form);
   const target = Number(values.get("targetYear"));
   await window.SproutStore.duplicateYear(Number(values.get("sourceYear")), target);
-  state.year = target; state.selected = null; state.modal = null; state.mode = "browse"; state.map.initializedYear = null; render(); toast(`${target} is now the active garden plan.`);
+  state.year = target; state.selected = null; state.modal = null; state.mode = "browse"; state.map.initializedYear = null; render(); saveFlash();
+  toast(`${target} is now the active garden plan.`);
 }
 
 function applyFieldChoice(button) {
@@ -1050,6 +1135,7 @@ function bindMap() {
       if (allowed) {
         const item = findItem(kind, handleId);
         const node = handle.closest(kind === "bed" ? ".bed-wrap" : ".plant-marker");
+        node?.classList.add("item-lifted");
         state.selected = { type: kind, id: handleId };
         interaction = { type: `resize-${kind}`, id: handleId, corner: handle.dataset.corner, startX: event.clientX, startY: event.clientY, originalX: item.x, originalY: item.y, originalW: item.widthIn, originalH: item.heightIn, moved: false, node };
       }
@@ -1064,6 +1150,7 @@ function bindMap() {
       if (!yearIsReadOnly() && (bedInteractive || plantInteractive)) {
         state.selected = { type: kind, id };
         const item = findItem(kind, id);
+        target.classList.add("item-lifted");
         interaction = { type: kind, id, startX: event.clientX, startY: event.clientY, originalX: item.x, originalY: item.y, moved: false, node: target };
       } else if (kind === "bed" && state.mode !== "layout") {
         interaction = { type: "pan", startX: event.clientX, startY: event.clientY, originalX: state.map.panX, originalY: state.map.panY, moved: false };
@@ -1136,6 +1223,7 @@ function bindMap() {
   viewport.onpointerup = async (event) => {
     pointers.delete(event.pointerId);
     viewport.classList.remove("dragging");
+    interaction?.node?.classList.remove("item-lifted");
     if (interaction && interaction.type.startsWith("resize-") && interaction.moved) {
       const kind = interaction.type === "resize-bed" ? "bed" : "plant";
       const item = findItem(kind, interaction.id);
@@ -1230,7 +1318,11 @@ document.addEventListener("click", async (event) => {
   try {
     if (action === "sign-in") await window.SproutStore.signIn();
     if (action === "sign-out") await window.SproutStore.signOut();
-    if (action === "tab") { state.tab = button.dataset.tab; state.selected = null; state.modal = null; render(); }
+    if (action === "tab") {
+      const nextTab = button.dataset.tab;
+      document.documentElement.dataset.navDir = TAB_ORDER.indexOf(nextTab) >= TAB_ORDER.indexOf(state.tab) ? "fwd" : "back";
+      withTransition("tab", () => { state.tab = nextTab; state.selected = null; state.modal = null; render(); });
+    }
     if (action === "seed-category") { state.seedCategory = button.dataset.category; render(); }
     if (action === "year-subtab") { state.yearSubTab = button.dataset.subtab; render(); }
     if (action === "mode") { state.mode = button.dataset.mode; state.selected = null; render(); }
@@ -1262,7 +1354,10 @@ document.addEventListener("click", async (event) => {
     if (action === "zoom-out") $(".map-viewport")?._gardenZoom(.83);
     if (action === "fit-map") $(".map-viewport")?._gardenFit();
     if (action === "duplicate-year") openModal({ type: "duplicate" });
-    if (action === "view-year") { state.year = Number(button.dataset.year); state.tab = "garden"; state.map.initializedYear = null; render(); }
+    if (action === "view-year") {
+      document.documentElement.dataset.navDir = TAB_ORDER.indexOf("garden") >= TAB_ORDER.indexOf(state.tab) ? "fwd" : "back";
+      withTransition("tab", () => { state.year = Number(button.dataset.year); state.tab = "garden"; state.map.initializedYear = null; render(); });
+    }
     if (action === "save-bed") {
       const form = $("#bed-form");
       if (!form) throw new Error("The bed editor could not be found. Close it and try again.");
