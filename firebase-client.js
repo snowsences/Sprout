@@ -173,7 +173,10 @@ if (configured) {
     refs[key] = collection(db, ...base, key);
   }
 
-  getRedirectResult(auth).catch(() => event("error", "Sign-in failed. Please try again."));
+  getRedirectResult(auth).catch((error) => {
+    console.error("getRedirectResult failed:", error);
+    event("error", `Sign-in failed: ${error?.code || error?.message || "unknown error"}`);
+  });
 
   onAuthStateChanged(auth, (user) => {
     stops.forEach((stop) => stop());
