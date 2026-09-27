@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=62";
+import "./firebase-client.js?v=63";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -477,7 +477,7 @@ function renderYearCard() {
       ${readOnly ? "" : `<label class="year-cover-upload" aria-label="${record.coverPhoto ? "Change photo" : "Add cover photo"}">${icon("edit")}<input class="hidden" type="file" accept="image/*" data-year-cover="${year}"></label>`}
     </div>
     <div class="year-card-body">
-      <div class="section-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
+      <div class="section-head year-updates-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
       ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?"></textarea><label class="text-button year-update-photo-label">${icon("camera")} Add photo<input class="hidden" type="file" accept="image/*" name="photo"></label><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
       <div class="year-timeline">${!state.dataReady ? skeletonTimelineRows() : updates.length ? renderUpdateEntries(updates, readOnly) : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
