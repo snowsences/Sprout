@@ -145,6 +145,7 @@ function icon(name) {
     duplicate: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     check: '<path d="m5 13 4 4L19 7"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   };
@@ -747,6 +748,7 @@ function renderSettings() {
     <section class="settings-card wide"><h2>Years</h2><p>The active year can be edited. Older years remain read-only snapshots.</p><div class="button-row">${years.map((year) => `<button class="secondary-button" data-action="view-year" data-year="${year.year}">${year.year}${Number(year.year) === Number(state.data.settings.activeYear) ? " · Active" : ""}</button>`).join("")}<button class="primary-button" data-action="duplicate-year">Duplicate a year</button></div></section>
     <section class="settings-card"><h2>Backup</h2><p>Download all Sprout data as JSON, or merge a previous backup into Firestore.</p><div class="button-row"><button class="secondary-button" data-action="export">${icon("download")} Export</button><button class="secondary-button" data-action="import">${icon("upload")} Import</button></div></section>
     <section class="settings-card"><h2>Connections</h2><p>Firebase: <strong>${window.SproutStore.configured ? "Configured" : "Needs setup"}</strong><br>Photos: <strong>${SPROUT_CONFIG.cloudinaryWorkerUrl.startsWith("PASTE_") ? "Worker URL needed" : "Configured"}</strong></p><p>Photo uploads are resized in the browser to 1500px and kept below about 3.5MB.</p></section>
+    <section class="settings-card"><h2>App</h2><p>Sprout stays open like a native app, so it won't always notice a new version on its own. Refresh to grab the latest.</p><button class="secondary-button" data-action="refresh-app">${icon("refresh")} Refresh app</button></section>
     ${renderActivityCard()}
   </div></section>`;
 }
@@ -1490,6 +1492,11 @@ document.addEventListener("click", async (event) => {
     if (action === "delete-year-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); if (confirm("Delete this update?")) { await window.SproutStore.deleteYearUpdate(entry); render(); } }
     if (action === "undo-activity") { const entry = state.data.activity.find((item) => item.id === button.dataset.id); await window.SproutStore.undoLast(entry); toast("Last action undone."); }
     if (action === "confirm-action") { const run = state.modal.run; await run(); state.modal = null; render(); }
+    if (action === "refresh-app") {
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+      await refreshApp();
+    }
     if (action === "export") exportBackup();
     if (action === "import") importBackup();
   } catch (error) {
@@ -1692,5 +1699,20 @@ window.addEventListener("sprout:data", (event) => { state.data = event.detail; s
 window.addEventListener("sprout:error", (event) => toast(event.detail, "error"));
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+
+async function refreshApp() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } finally {
+    window.location.reload();
+  }
+}
 render();
 if (state.user) { ensureInitialYear(); ensureWeatherFresh(); }
