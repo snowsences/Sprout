@@ -194,6 +194,16 @@ h1,h2,h3,strong{font-weight:500}
 .status-shortcut{flex:1;min-width:0;padding:8px 6px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12.5px;font-weight:500;color:var(--green-dark);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .content-page{padding:24px max(20px,calc((100vw - 920px)/2));background:var(--paper)}
 .page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}.page-heading h1{font-size:30px;letter-spacing:-.03em;margin-bottom:4px}.page-heading p{color:var(--muted);margin:0}.page-actions{display:flex;gap:8px}
+.seed-view-toggle{padding:3px}
+.seed-view-toggle button{padding:8px 12px}
+.seed-view-toggle svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;display:block}
+.seed-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.seed-card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface);box-shadow:0 2px 8px rgba(38,55,42,.04);text-align:left;width:100%}
+.seed-card-photo{position:relative;aspect-ratio:1;background:var(--plant-color,var(--surface-2));display:grid;place-items:center;font-size:40px;overflow:hidden}
+.seed-card-photo img{width:100%;height:100%;object-fit:cover}
+.seed-card-caption{padding:10px 12px}
+.seed-card-caption h3{font-size:14px;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seed-card-caption p{font-size:12px;color:var(--muted);margin:0}
 .search-row{display:flex;gap:10px;margin-bottom:16px}.search-wrap{position:relative;flex:1}.search-wrap input{width:100%;padding-left:42px}.search-wrap svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2}
 .filter-select{width:auto}
 .plant-category-tabs{display:flex;gap:5px;margin:0 0 16px;padding:3px;border-radius:13px;background:var(--surface-2);overflow-x:auto;scrollbar-width:none}.plant-category-tabs::-webkit-scrollbar{display:none}.plant-category-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:0 0 auto;min-height:40px;padding:8px 12px;border-radius:10px;color:var(--muted);white-space:nowrap}.plant-category-tabs button.active{background:#fff;color:var(--green-dark);box-shadow:0 1px 5px rgba(30,60,40,.12)}.plant-category-tabs button span{font-size:18px;line-height:1}
@@ -223,6 +233,8 @@ h1,h2,h3,strong{font-weight:500}
   .mode-beds-btn,.add-plant-btn{display:none}
   .topbar-add-plant{display:inline-flex}
   .content-page{padding:18px 14px 28px}.page-heading{align-items:flex-start;margin-bottom:16px}.page-heading h1{font-size:26px}.page-heading p{font-size:14px}.page-actions .primary-button{font-size:0;width:44px;padding:0}.page-actions .primary-button::after{content:"+";font-size:24px}
+  .seed-view-toggle button{padding:8px}
+  .seed-grid{grid-template-columns:repeat(2,1fr);gap:12px}
   .settings-grid{grid-template-columns:1fr}.settings-card.wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.filter-select{width:120px}.plant-row{grid-template-columns:48px minmax(0,1fr);padding:10px}.plant-avatar{width:44px;height:44px}.plant-row .status-pill{grid-column:2;justify-self:start}.activity-row{grid-template-columns:38px minmax(0,1fr)}.activity-time{grid-column:2}
   .modal-layer{align-items:flex-end;padding:0}.modal,.modal.large{width:100%;max-height:94dvh;border-radius:22px 22px 0 0}.modal-header{padding:15px 16px}.modal-body{padding:16px}.modal-actions{padding:12px 16px max(12px,env(safe-area-inset-bottom))}.fact-grid{grid-template-columns:repeat(2,1fr)}.photo-grid{grid-template-columns:repeat(3,1fr)}
   .selection-card{left:10px;bottom:10px;width:calc(100% - 20px)}
@@ -287,24 +299,3 @@ button:not(:disabled):active,.nav-item:active,.plant-row:active,.choice:active,.
 .skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);animation:skeleton-shimmer 1.4s ease-in-out infinite}
 @keyframes skeleton-shimmer{to{transform:translateX(100%)}}
 
-/* View Transitions: modal + tab motion */
-.modal-layer{view-transition-name:modal-layer}
-.modal{view-transition-name:modal-sheet}
-.main{view-transition-name:main-view}
-@keyframes modal-backdrop-in{from{opacity:0}}
-@keyframes modal-backdrop-out{to{opacity:0}}
-@keyframes modal-sheet-in{from{transform:translateY(32px);opacity:0}}
-@keyframes modal-sheet-out{to{transform:translateY(32px);opacity:0}}
-html[data-transition="modal-open"] ::view-transition-new(modal-layer){animation:modal-backdrop-in .28s ease-out}
-html[data-transition="modal-close"] ::view-transition-old(modal-layer){animation:modal-backdrop-out .22s ease-in forwards}
-html[data-transition="modal-open"] ::view-transition-new(modal-sheet){animation:modal-sheet-in .32s cubic-bezier(.22,1,.36,1)}
-html[data-transition="modal-close"] ::view-transition-old(modal-sheet){animation:modal-sheet-out .24s ease-in forwards}
-@keyframes tab-out-fwd{to{transform:translateX(-14px);opacity:0}}
-@keyframes tab-in-fwd{from{transform:translateX(14px);opacity:0}}
-@keyframes tab-out-back{to{transform:translateX(14px);opacity:0}}
-@keyframes tab-in-back{from{transform:translateX(-14px);opacity:0}}
-html[data-transition="tab"][data-nav-dir="fwd"] ::view-transition-old(main-view){animation:tab-out-fwd .24s ease-in forwards}
-html[data-transition="tab"][data-nav-dir="fwd"] ::view-transition-new(main-view){animation:tab-in-fwd .24s ease-out}
-html[data-transition="tab"][data-nav-dir="back"] ::view-transition-old(main-view){animation:tab-out-back .24s ease-in forwards}
-html[data-transition="tab"][data-nav-dir="back"] ::view-transition-new(main-view){animation:tab-in-back .24s ease-out}
-::view-transition-group(modal-layer),::view-transition-group(modal-sheet),::view-transition-group(main-view){animation-duration:.28s}

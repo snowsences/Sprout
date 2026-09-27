@@ -121,6 +121,17 @@ async function commitMany(operations, activity) {
   await batch.commit();
 }
 
+const ACTIVITY_LIMIT = 100;
+let pruningActivity = false;
+function pruneActivity() {
+  if (pruningActivity || data.activity.length <= ACTIVITY_LIMIT) return;
+  const stale = data.activity.slice(ACTIVITY_LIMIT);
+  pruningActivity = true;
+  const batch = writeBatch(db);
+  for (const entry of stale) batch.delete(doc(refs.activity, entry.id));
+  batch.commit().catch(() => {}).finally(() => { pruningActivity = false; });
+}
+
 function subscribe(key, fallback) {
   const target = key === "activity" ? query(refs.activity, orderBy("createdAt", "desc"), limit(500)) : refs[key];
   stops.push(onSnapshot(
@@ -139,6 +150,7 @@ function subscribe(key, fallback) {
         };
       }
       emit();
+      if (key === "activity" && !snapshot.metadata.fromCache) pruneActivity();
     },
     (error) => event("error", error?.code === "permission-denied" ? "This Google account is not authorized for Sprout." : "Sprout could not sync."),
   ));

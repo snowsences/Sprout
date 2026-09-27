@@ -29,7 +29,8 @@ const state = {
   dataReady: false,
   tab: "garden",
   year: null,
-  seedCategory: "all",
+  seedCategory: "year",
+  seedView: "list",
   yearSubTab: "calendar",
   addUpdateOpen: false,
   search: "",
@@ -144,6 +145,8 @@ function icon(name) {
     duplicate: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     check: '<path d="m5 13 4 4L19 7"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.garden}</svg>`;
 }
@@ -164,13 +167,11 @@ function toast(message, kind = "") {
 
 const TAB_ORDER = ["garden", "year", "seeds", "settings"];
 function withTransition(kind, fn) {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduceMotion || !document.startViewTransition) { fn(); return; }
-  document.documentElement.dataset.transition = kind;
-  const transition = document.startViewTransition(() => fn());
-  transition.finished.finally(() => {
-    if (document.documentElement.dataset.transition === kind) delete document.documentElement.dataset.transition;
-  });
+  // View Transitions API disabled: it was producing a stuck, oversized
+  // ::view-transition-group(main-view) overlay that broke the bottom nav's
+  // layout (grew huge, detached from the bottom, varied per tab). Falling
+  // back to a plain re-render until this can be root-caused safely.
+  fn();
 }
 
 function saveFlash() {
@@ -241,6 +242,7 @@ function render() {
   }
   if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR);
   const years = [...new Set([state.data.settings.activeYear, ...state.data.years.map((item) => item.year), ...state.data.weather.map((item) => item.year)])].filter(Boolean).sort((a, b) => b - a);
+  const scrollTops = $$(".tab-page, .year-pane").map((el) => el.scrollTop);
   root.innerHTML = `
     <div class="app-shell">
       <header class="topbar">
@@ -265,6 +267,7 @@ function render() {
     </div>
     ${renderModal()}
   `;
+  $$(".tab-page, .year-pane").forEach((el, index) => { if (scrollTops[index] != null) el.scrollTop = scrollTops[index]; });
   if (state.tab === "garden") requestAnimationFrame(bindMap);
 }
 
@@ -699,7 +702,7 @@ function renderInsights(year) {
 function renderSeeds() {
   const query = state.search.trim().toLowerCase();
   const seeds = [...state.data.seeds]
-    .filter((seed) => state.seedCategory === "all" || categoryForSeed(seed) === state.seedCategory)
+    .filter((seed) => state.seedCategory === "all" || (state.seedCategory === "year" ? plantsForSeedThisYear(seed.id).length > 0 : categoryForSeed(seed) === state.seedCategory))
     .filter((seed) => !query || seed.commonName.toLowerCase().includes(query) || seed.notes?.toLowerCase().includes(query))
     .sort((a, b) => {
       const yearDiff = (lastPlantedYear(b.id) || 0) - (lastPlantedYear(a.id) || 0);
@@ -708,10 +711,24 @@ function renderSeeds() {
       if (categoryDiff) return categoryDiff;
       return a.commonName.localeCompare(b.commonName);
     });
-  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
+  const cards = (seed) => {
+    const activeCount = plantsForSeedThisYear(seed.id).length;
+    const lastYear = lastPlantedYear(seed.id);
+    const avgRating = seedAverageRating(seed);
+    const caption = `${esc(seed.commonName)}${avgRating ? ` ${halfStarRatingHtml(avgRating)}` : ""}`;
+    const meta = `${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}`;
+    if (state.seedView === "grid") {
+      return `<button class="seed-card" data-action="seed-details" data-id="${seed.id}"><span class="seed-card-photo" style="--plant-color:${esc(seed.color)}">${seed.coverPhoto?.url ? `<img src="${esc(seed.coverPhoto.url)}" alt="${esc(seed.commonName)} photo" loading="lazy">` : esc(iconForSeed(seed))}</span><span class="seed-card-caption"><h3>${caption}</h3><p>${meta}</p></span></button>`;
+    }
+    return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${caption}</h3><p>${meta}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`;
+  };
+  const listClass = state.seedView === "grid" ? "seed-grid" : "plant-list";
+  return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1></div><div class="page-actions">
+    <div class="segmented seed-view-toggle" aria-label="Seed view"><button data-action="seed-view" data-view="list" class="${state.seedView !== "grid" ? "active" : ""}" aria-label="List view" aria-pressed="${state.seedView !== "grid"}">${icon("list")}</button><button data-action="seed-view" data-view="grid" class="${state.seedView === "grid" ? "active" : ""}" aria-label="Grid view" aria-pressed="${state.seedView === "grid"}">${icon("grid")}</button></div>
+    <button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search seeds" value="${esc(state.search)}"></label></div>
-    <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
-    <div class="plant-list">${!state.dataReady ? skeletonPlantRows() : seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); const avgRating = seedAverageRating(seed); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}${avgRating ? ` ${halfStarRatingHtml(avgRating)}` : ""}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
+    <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "year"}" class="${state.seedCategory === "year" ? "active" : ""}" data-action="seed-category" data-category="year">${state.year}</button><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
+    <div class="${listClass}">${!state.dataReady ? skeletonPlantRows() : seeds.length ? seeds.map(cards).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
   </section>`;
 }
 
@@ -1345,6 +1362,7 @@ document.addEventListener("click", async (event) => {
       withTransition("tab", () => { state.tab = nextTab; state.selected = null; state.modal = null; render(); });
     }
     if (action === "seed-category") { state.seedCategory = button.dataset.category; render(); }
+    if (action === "seed-view") { state.seedView = button.dataset.view; render(); }
     if (action === "year-subtab") { state.yearSubTab = button.dataset.subtab; render(); }
     if (action === "mode") { state.mode = button.dataset.mode; state.selected = null; render(); }
     if (action === "edit-bed") openModal({ type: "bed", id: button.dataset.id });
