@@ -49,8 +49,8 @@ h1,h2,h3,strong{font-weight:500}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:#58a46b}
 .main{position:relative;min-height:0;overflow:hidden}
 .tab-page{height:100%;overflow:auto}
-.bottom-nav{z-index:40;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:rgba(255,253,247,.96);padding:7px max(8px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));backdrop-filter:blur(16px)}
-.nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#6b756f;font-size:12px;border-radius:12px}
+.bottom-nav{z-index:40;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:rgba(255,253,247,.96);padding:7px max(8px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));backdrop-filter:blur(16px)}
+.nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#6b756f;font-size:12px;border-radius:12px;min-height:0;overflow:hidden}
 .nav-item svg{width:23px;height:23px;fill:currentColor}
 .nav-item.active{color:var(--green-dark);background:var(--green-soft)}
 .garden-page{display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:#dde7d7}

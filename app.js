@@ -1,4 +1,4 @@
-import "./firebase-client.js";
+import "./firebase-client.js?v=42";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1721,7 +1721,7 @@ async function refreshApp() {
       await Promise.all(keys.map((key) => caches.delete(key)));
     }
   } finally {
-    window.location.reload();
+    window.location.href = `${window.location.pathname}?refresh=${Date.now()}`;
   }
 }
 render();
