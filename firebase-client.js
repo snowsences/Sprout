@@ -152,6 +152,7 @@ function subscribe(key, fallback) {
           fromCache: snapshot.metadata.fromCache,
         };
       }
+      if (key === "years") console.log("[debug] years snapshot", { fromCache: snapshot.metadata.fromCache, years: data.years });
       emit();
       if (key === "activity" && !snapshot.metadata.fromCache) pruneActivity();
     },
@@ -411,7 +412,11 @@ window.SproutStore = {
   saveYearCover: (year, photo) => {
     const existing = data.years.find((entry) => Number(entry.year) === Number(year));
     const item = { ...(existing || { id: String(year), year: Number(year), createdAt: now() }), coverPhoto: photo, updatedAt: now(), ...actor() };
-    return commitDocument("years", item, { activity: "updated year cover photo" });
+    console.log("[debug] saveYearCover", { year, existing, item });
+    return commitDocument("years", item, { activity: "updated year cover photo" }).then((saved) => {
+      console.log("[debug] saveYearCover committed", saved);
+      return saved;
+    });
   },
 
   addYearUpdate: (input) => {
