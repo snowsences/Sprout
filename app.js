@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=44";
+import "./firebase-client.js?v=45";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);

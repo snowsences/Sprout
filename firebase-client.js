@@ -26,6 +26,8 @@ import { FIREBASE_CONFIG, SPROUT_CONFIG } from "./config.js";
 const configured = !Object.values(FIREBASE_CONFIG).some((value) => String(value).startsWith("PASTE_"));
 const event = (name, detail) => window.dispatchEvent(new CustomEvent(`sprout:${name}`, { detail }));
 const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const useRedirectSignIn = isStandalone || isMobile;
 
 let auth = null;
 let db = null;
@@ -203,7 +205,7 @@ window.SproutStore = {
   signIn: () => {
     if (!configured) throw new Error("Add the new Firebase project values to config.js first.");
     const provider = new GoogleAuthProvider();
-    return isStandalone ? signInWithRedirect(auth, provider) : signInWithPopup(auth, provider);
+    return useRedirectSignIn ? signInWithRedirect(auth, provider) : signInWithPopup(auth, provider);
   },
   signOut: () => signOut(auth),
   getData: () => data,
