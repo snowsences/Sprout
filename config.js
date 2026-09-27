@@ -10,7 +10,7 @@ export const FIREBASE_CONFIG = {
 
 export const SPROUT_CONFIG = {
   householdId: "shared",
-  allowedEmails: ["allenkevinc@gmail.com", "meganec96@gmail.com"],
+  allowedUids: ["FRSVgPioqZfYkWlBWYUdnPjEEO03", "eVuZNR5ZMtcBGsksyepA9fDkGVv1"],
   // Reuse the existing signed-upload Worker, or deploy cloudflare-worker.js.
   cloudinaryWorkerUrl: "https://sprout-images.allenkevinc.workers.dev",
   cloudinaryFolder: "Sprout",

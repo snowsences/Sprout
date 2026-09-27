@@ -3,10 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isSproutMember() {
       return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in [
-          'allenkevinc@gmail.com',
-          'meganec96@gmail.com'
+        && request.auth.uid in [
+          'FRSVgPioqZfYkWlBWYUdnPjEEO03',
+          'eVuZNR5ZMtcBGsksyepA9fDkGVv1'
         ];
     }
 

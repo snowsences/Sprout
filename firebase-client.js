@@ -155,8 +155,7 @@ if (configured) {
   onAuthStateChanged(auth, (user) => {
     stops.forEach((stop) => stop());
     stops = [];
-    const email = user?.email?.toLowerCase() || "";
-    const allowed = SPROUT_CONFIG.allowedEmails.map((entry) => entry.toLowerCase()).includes(email);
+    const allowed = Boolean(user?.uid) && SPROUT_CONFIG.allowedUids.includes(user.uid);
     window.SproutCurrentUser = user && allowed ? {
       uid: user.uid,
       email: user.email || "",
