@@ -190,6 +190,7 @@ h1,h2,h3,strong{font-weight:500}
 .selection-card{position:absolute;left:16px;bottom:16px;z-index:8;width:min(340px,calc(100% - 32px));padding:14px;border-radius:16px;background:rgba(255,253,247,.96);box-shadow:var(--shadow);border:1px solid rgba(39,71,46,.12);backdrop-filter:blur(12px)}
 .selection-head{display:flex;align-items:center;gap:11px}.selection-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--plant-color,var(--green-soft));font-size:22px;overflow:hidden}.selection-copy{min-width:0;flex:1}.selection-copy h3{font-size:17px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.selection-copy p{margin:2px 0 0;color:var(--muted);font-size:14px}.selection-actions{display:flex;gap:8px;margin-top:12px}.selection-actions button{flex:1}
 .status-shortcuts{display:flex;gap:8px;margin-top:10px}
+.photo-capture{margin-top:12px}
 .status-shortcut{flex:1;min-width:0;padding:8px 6px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:12.5px;font-weight:500;color:var(--green-dark);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .content-page{padding:24px max(20px,calc((100vw - 920px)/2));background:var(--paper)}
 .page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}.page-heading h1{font-size:30px;letter-spacing:-.03em;margin-bottom:4px}.page-heading p{color:var(--muted);margin:0}.page-actions{display:flex;gap:8px}

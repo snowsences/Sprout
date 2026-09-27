@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=55";
+import "./firebase-client.js?v=56";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -365,6 +365,7 @@ function renderGarden() {
         <button class="icon-button" data-action="fit-map" aria-label="Fit garden">${icon("fit")}</button>
         <button class="icon-button" data-action="zoom-in" aria-label="Zoom in">${icon("plus")}</button>
       </div>
+      ${!readOnly && state.mode === "plants" && selectedPlant ? `<button class="icon-button" data-action="duplicate-plant" aria-label="Duplicate plant">${icon("duplicate")}</button>` : ""}
     </div>
     <div class="garden-body">
       <div class="map-viewport" aria-label="Garden plan">
@@ -408,7 +409,7 @@ function renderSelectionPlant(plant) {
   const prevStatus = statusIndex > 0 ? STATUSES[statusIndex - 1] : null;
   const nextStatus = statusIndex >= 0 && statusIndex < STATUSES.length - 1 ? STATUSES[statusIndex + 1] : null;
   const statusShortcuts = !yearIsReadOnly() && (prevStatus || nextStatus) ? `<div class="status-shortcuts">${prevStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${prevStatus}">← ${title(prevStatus)}</button>` : ""}${nextStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${nextStatus}">${title(nextStatus)} →</button>` : ""}</div>` : "";
-  const addPhoto = yearIsReadOnly() ? "" : `<label class="primary-button full photo-capture">${icon("camera")}Add Photo<input class="hidden" type="file" accept="image/*" capture="environment" data-photo-plant="${plant.id}"></label>`;
+  const addPhoto = yearIsReadOnly() ? "" : `<label class="secondary-button full photo-capture">${icon("camera")}Add Photo<input class="hidden" type="file" accept="image/*" capture="environment" data-photo-plant="${plant.id}"></label>`;
   return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="selection-copy"><h3>${esc(seed.commonName || "Plant")}</h3><p>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)} · ${title(plant.status)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${statusShortcuts}${addPhoto}<div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
 }
 
@@ -1567,6 +1568,7 @@ document.addEventListener("click", async (event) => {
     if (action === "zoom-out") $(".map-viewport")?._gardenZoom(.83);
     if (action === "fit-map") $(".map-viewport")?._gardenFit();
     if (action === "duplicate-year") openModal({ type: "duplicate" });
+    if (action === "duplicate-plant") { copySelected(); await pasteClipboard(); }
     if (action === "view-year") {
       document.documentElement.dataset.navDir = TAB_ORDER.indexOf("garden") >= TAB_ORDER.indexOf(state.tab) ? "fwd" : "back";
       withTransition("tab", () => { state.year = Number(button.dataset.year); state.tab = "garden"; state.map.initializedYear = null; render(); });
