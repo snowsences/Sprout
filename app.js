@@ -26,6 +26,7 @@ const LOG_TYPES = ["note", "watered", "fertilised", "pruned", "transplanted", "p
 const state = {
   user: window.SproutCurrentUser || null,
   data: window.SproutData || window.SproutStore.getData(),
+  dataReady: false,
   tab: "garden",
   year: null,
   seedCategory: "all",
@@ -331,12 +332,11 @@ function renderGarden() {
   return `<section class="tab-page garden-page">
     <div class="garden-tools">
       <div class="segmented" aria-label="Garden interaction mode">
-        <button data-action="mode" data-mode="browse" class="${state.mode === "browse" ? "active" : ""}">Browse</button>
+        <button data-action="mode" data-mode="browse" class="${state.mode === "browse" ? "active" : ""}">View</button>
         <button class="mode-beds-btn ${state.mode === "layout" ? "active" : ""}" data-action="mode" data-mode="layout" ${readOnly ? "disabled" : ""}>Beds</button>
         <button data-action="mode" data-mode="plants" class="${state.mode === "plants" ? "active" : ""}" ${readOnly ? "disabled" : ""}>Plants</button>
       </div>
       <span class="tool-divider"></span>
-      <button class="tool-button add-bed-btn" data-action="add-bed" ${readOnly || beds.length >= 10 ? "disabled" : ""}>${icon("plus")}<span>Add bed</span></button>
       <button class="tool-button primary add-plant-btn" data-action="add-plant" ${readOnly || !seeds.length ? "disabled" : ""}>${icon("plus")}<span>Add plant</span></button>
       ${readOnly ? `<button class="tool-button" data-action="duplicate-year">${icon("duplicate")}<span>Duplicate year</span></button>` : ""}
       <div class="zoom-group">
@@ -347,11 +347,11 @@ function renderGarden() {
     </div>
     <div class="garden-body">
       <div class="map-viewport" aria-label="Garden plan">
-        <div class="garden-world ${readOnly ? "readonly" : ""} ${state.mode !== "layout" ? "beds-inert" : ""} ${state.mode === "layout" ? "layout-mode" : ""}" style="width:${settings.widthIn * PX_PER_INCH}px;height:${settings.heightIn * PX_PER_INCH}px;background-size:${settings.gridIn * PX_PER_INCH}px ${settings.gridIn * PX_PER_INCH}px">
-          ${beds.map((bed) => renderBed(bed)).join("")}
-          ${plants.map((plant) => renderPlantMarker(plant)).join("")}
+        <div class="garden-world ${readOnly ? "readonly" : ""} ${state.mode !== "layout" ? "beds-inert" : ""} ${state.mode === "layout" ? "layout-mode" : ""}" style="width:${settings.widthIn * PX_PER_INCH * (state.map.zoom || 1)}px;height:${settings.heightIn * PX_PER_INCH * (state.map.zoom || 1)}px;background-size:${settings.gridIn * PX_PER_INCH * (state.map.zoom || 1)}px ${settings.gridIn * PX_PER_INCH * (state.map.zoom || 1)}px">
+          ${beds.map((bed) => renderBed(bed, PX_PER_INCH * (state.map.zoom || 1))).join("")}
+          ${plants.map((plant) => renderPlantMarker(plant, PX_PER_INCH * (state.map.zoom || 1))).join("")}
         </div>
-        ${!beds.length && !plants.length ? `<div class="map-empty"><h2>${readOnly ? "No beds in this snapshot" : "Start planning your garden"}</h2><p>${readOnly ? "This year does not contain a saved layout." : "Add a numbered bed for visual context, or add seeds and place plants anywhere on the grid."}</p>${readOnly ? "" : '<button class="primary-button" data-action="add-bed">Add first bed</button>'}</div>` : ""}
+        ${!beds.length && !plants.length ? `<div class="map-empty"><h2>${readOnly ? "No beds in this snapshot" : "Start planning your garden"}</h2><p>${readOnly ? "This year does not contain a saved layout." : "Copy a bed from another year (⌘/Ctrl+C) and paste it here (⌘/Ctrl+V) to get started, or add seeds and place plants anywhere on the grid."}</p></div>` : ""}
         ${selectedPlant ? renderSelectionPlant(selectedPlant) : selectedBed ? renderSelectionBed(selectedBed) : ""}
       </div>
     </div>
@@ -362,36 +362,36 @@ function resizeHandles(kind, id) {
   return ["nw", "ne", "sw", "se"].map((corner) => `<span class="resize-handle rh-${corner}" data-resize="${kind}" data-corner="${corner}" data-id="${id}"></span>`).join("");
 }
 
-function renderBed(bed) {
-  const width = bed.widthIn * PX_PER_INCH;
-  const height = bed.heightIn * PX_PER_INCH;
+function renderBed(bed, scale) {
+  const width = bed.widthIn * scale;
+  const height = bed.heightIn * scale;
   const rotation = Number(bed.rotation || 0);
-  const quarterTurn = Math.abs(rotation % 180) === 90;
-  const visualLeft = quarterTurn ? (width - height) / 2 : 0;
-  const visualTop = quarterTurn ? (height - width) / 2 : 0;
   const selected = state.selected?.type === "bed" && state.selected.id === bed.id;
   const showHandles = !yearIsReadOnly() && state.mode === "layout" && selected;
-  return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * PX_PER_INCH}px;top:${bed.y * PX_PER_INCH}px;width:${width}px;height:${height}px">
+  return `<div class="bed-wrap" data-kind="bed" data-id="${bed.id}" style="left:${bed.x * scale}px;top:${bed.y * scale}px;width:${width}px;height:${height}px">
     <div class="bed ${state.mode === "layout" && selected ? "selected" : ""}" style="transform:rotate(${rotation}deg)"></div>
-    <span class="bed-number" style="left:${visualLeft}px;top:${visualTop}px">${bed.number}</span>
     ${showHandles ? resizeHandles("bed", bed.id) : ""}
   </div>`;
 }
 
-function renderPlantMarker(plant) {
+function renderPlantMarker(plant, scale) {
   const seed = seedFor(plant);
   const selected = state.selected?.type === "plant" && state.selected.id === plant.id;
   const showHandles = !yearIsReadOnly() && state.mode === "plants" && selected;
-  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(seed.color || "#4f8d5b")};left:${plant.x * PX_PER_INCH}px;top:${plant.y * PX_PER_INCH}px;width:${plant.widthIn * PX_PER_INCH}px;height:${plant.heightIn * PX_PER_INCH}px"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
+  return `<div class="plant-marker ${selected ? "selected" : ""}" data-kind="plant" data-id="${plant.id}" style="--plant-color:${esc(seed.color || "#4f8d5b")};left:${plant.x * scale}px;top:${plant.y * scale}px;width:${plant.widthIn * scale}px;height:${plant.heightIn * scale}px"><span class="plant-icon">${esc(iconForSeed(seed))}</span><span class="plant-label">${esc(seed.commonName || "Plant")}</span>${showHandles ? resizeHandles("plant", plant.id) : ""}</div>`;
 }
 
 function renderSelectionPlant(plant) {
   const seed = seedFor(plant);
-  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="selection-copy"><h3>${esc(seed.commonName || "Plant")}</h3><p>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)} · ${title(plant.status)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div><div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
+  const statusIndex = STATUSES.indexOf(plant.status);
+  const prevStatus = statusIndex > 0 ? STATUSES[statusIndex - 1] : null;
+  const nextStatus = statusIndex >= 0 && statusIndex < STATUSES.length - 1 ? STATUSES[statusIndex + 1] : null;
+  const statusShortcuts = !yearIsReadOnly() && (prevStatus || nextStatus) ? `<div class="status-shortcuts">${prevStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${prevStatus}">← ${title(prevStatus)}</button>` : ""}${nextStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${nextStatus}">${title(nextStatus)} →</button>` : ""}</div>` : "";
+  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="selection-copy"><h3>${esc(seed.commonName || "Plant")}</h3><p>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)} · ${title(plant.status)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${statusShortcuts}<div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
 }
 
 function renderSelectionBed(bed) {
-  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon">${bed.number}</div><div class="selection-copy"><h3>Bed ${bed.number}</h3><p>${dimensions(bed.widthIn)} × ${dimensions(bed.heightIn)}${bed.notes ? ` · ${esc(bed.notes)}` : ""}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${yearIsReadOnly() ? "" : `<div class="selection-actions"><button class="primary-button" data-action="edit-bed" data-id="${bed.id}">Edit bed</button></div>`}</aside>`;
+  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon">▦</div><div class="selection-copy"><h3>Bed</h3><p>${dimensions(bed.widthIn)} × ${dimensions(bed.heightIn)}${bed.notes ? ` · ${esc(bed.notes)}` : ""}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${yearIsReadOnly() ? "" : `<div class="selection-actions"><button class="primary-button" data-action="edit-bed" data-id="${bed.id}">Edit bed</button></div>`}</aside>`;
 }
 
 function renderYearCard() {
@@ -408,7 +408,7 @@ function renderYearCard() {
     <div class="year-card-body">
       <div class="section-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
       ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?"></textarea><label class="text-button year-update-photo-label">${icon("camera")} Add photo<input class="hidden" type="file" accept="image/*" name="photo"></label><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
-      <div class="year-timeline">${updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
+      <div class="year-timeline">${!state.dataReady ? skeletonTimelineRows() : updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
   </aside>`;
 }
@@ -622,7 +622,35 @@ function statTile(label, value) {
   return `<div class="stat-tile"><strong>${value}</strong><span>${esc(label)}</span></div>`;
 }
 
+function skel(width, height, extra = "") {
+  return `<span class="skeleton" style="width:${width};height:${height};${extra}"></span>`;
+}
+
+function skeletonChartCard() {
+  return `<div class="chart-card">${skel("55%", "14px", "margin-bottom:14px")}${skel("100%", "160px", "border-radius:12px")}</div>`;
+}
+
+function renderInsightsSkeleton() {
+  return `<div class="insights-pane">
+    <div class="insights-section"><div class="section-head">${skel("90px", "18px")}</div>${skeletonChartCard()}${skeletonChartCard()}<div class="stat-tiles">${skel("100%", "68px", "border-radius:14px")}${skel("100%", "68px", "border-radius:14px")}${skel("100%", "68px", "border-radius:14px")}</div></div>
+    <div class="insights-section"><div class="section-head">${skel("110px", "18px")}</div>${skeletonChartCard()}</div>
+  </div>`;
+}
+
+function skeletonPlantRows(count = 4) {
+  return Array.from({ length: count }, () => `<div class="plant-row">${skel("48px", "48px", "border-radius:50%")}<span class="plant-main">${skel("60%", "14px", "margin-bottom:6px")}${skel("38%", "11px")}</span></div>`).join("");
+}
+
+function skeletonActivityRows(count = 4) {
+  return Array.from({ length: count }, () => `<div class="activity-row">${skel("38px", "38px", "border-radius:50%")}<div>${skel("70%", "13px", "margin-bottom:6px")}${skel("45%", "11px")}</div></div>`).join("");
+}
+
+function skeletonTimelineRows(count = 3) {
+  return Array.from({ length: count }, () => `<article class="timeline-entry">${skel("35%", "11px", "margin-bottom:8px")}${skel("100%", "13px", "margin-bottom:5px")}${skel("80%", "13px")}</article>`).join("");
+}
+
 function renderInsights(year) {
+  if (!state.dataReady) return renderInsightsSkeleton();
   const weather = state.data.weather.find((w) => Number(w.year) === Number(year));
   const monthlyEntries = state.data.yearUpdates.filter((u) => u.type === "monthly" && Number(u.year) === Number(year));
 
@@ -683,13 +711,13 @@ function renderSeeds() {
   return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Seeds</h1></div><div class="page-actions"><button class="icon-button" data-action="category-dates" aria-label="Category planting dates">${icon("settings")}</button><button class="primary-button" data-action="add-seed">Add seed</button></div></div>
     <div class="search-row"><label class="search-wrap">${icon("search")}<input id="plant-search" type="search" placeholder="Search seeds" value="${esc(state.search)}"></label></div>
     <div class="plant-category-tabs" role="tablist" aria-label="Seed categories"><button role="tab" aria-selected="${state.seedCategory === "all"}" class="${state.seedCategory === "all" ? "active" : ""}" data-action="seed-category" data-category="all">All</button>${PLANT_CATEGORIES.map((category) => `<button role="tab" aria-selected="${state.seedCategory === category.id}" class="${state.seedCategory === category.id ? "active" : ""}" data-action="seed-category" data-category="${category.id}"><span>${category.icon}</span>${category.label}</button>`).join("")}</div>
-    <div class="plant-list">${seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); const avgRating = seedAverageRating(seed); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}${avgRating ? ` ${halfStarRatingHtml(avgRating)}` : ""}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
+    <div class="plant-list">${!state.dataReady ? skeletonPlantRows() : seeds.length ? seeds.map((seed) => { const activeCount = plantsForSeedThisYear(seed.id).length; const lastYear = lastPlantedYear(seed.id); const avgRating = seedAverageRating(seed); return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${esc(seed.commonName)}${avgRating ? ` ${halfStarRatingHtml(avgRating)}` : ""}</h3><p>${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`; }).join("") : '<div class="empty-state">No seeds match this view. Add your first seed to get started.</div>'}</div>
   </section>`;
 }
 
 function renderActivityCard() {
   const entries = [...state.data.activity].filter((entry) => Number(entry.year) === Number(state.year)).sort((a, b) => b.createdAt - a.createdAt);
-  return `<section class="settings-card wide"><h2>Activity</h2><p>Everything changed in ${state.year}, and who changed it.</p><div class="activity-list">${entries.length ? entries.map((entry, index) => `<div class="activity-row"><div class="activity-badge">${entry.subjectType === "plant" ? "🌱" : entry.subjectType === "bed" ? "▦" : "✓"}</div><div><p><strong>${esc(entry.actorName || entry.actorEmail || "Someone")}</strong> ${esc(entry.action)}${entry.label && entry.label !== "Sprout" ? ` <strong>${esc(entry.label)}</strong>` : ""}${entry.undoneAt ? " <em>(undone)</em>" : ""}</p><p class="activity-meta">${entry.sourceYear ? `Copied ${entry.sourceYear} into ${entry.targetYear}` : esc(entry.actorEmail || "")}</p></div><span class="activity-time">${dateText(entry.createdAt)}${index === 0 && !yearIsReadOnly() && entry.undo?.operations?.length && !entry.undoneAt ? `<button class="text-button" data-action="undo-activity" data-id="${entry.id}">Undo</button>` : ""}</span></div>`).join("") : '<div class="empty-state">No activity has been recorded for this year yet.</div>'}</div></section>`;
+  return `<section class="settings-card wide"><h2>Activity</h2><p>Everything changed in ${state.year}, and who changed it.</p><div class="activity-list">${!state.dataReady ? skeletonActivityRows() : entries.length ? entries.map((entry, index) => `<div class="activity-row"><div class="activity-badge">${entry.subjectType === "plant" ? "🌱" : entry.subjectType === "bed" ? "▦" : "✓"}</div><div><p><strong>${esc(entry.actorName || entry.actorEmail || "Someone")}</strong> ${esc(entry.action)}${entry.label && entry.label !== "Sprout" ? ` <strong>${esc(entry.label)}</strong>` : ""}${entry.undoneAt ? " <em>(undone)</em>" : ""}</p><p class="activity-meta">${entry.sourceYear ? `Copied ${entry.sourceYear} into ${entry.targetYear}` : esc(entry.actorEmail || "")}</p></div><span class="activity-time">${dateText(entry.createdAt)}${index === 0 && !yearIsReadOnly() && entry.undo?.operations?.length && !entry.undoneAt ? `<button class="text-button" data-action="undo-activity" data-id="${entry.id}">Undo</button>` : ""}</span></div>`).join("") : '<div class="empty-state">No activity has been recorded for this year yet.</div>'}</div></section>`;
 }
 
 function renderSettings() {
@@ -730,13 +758,12 @@ function modalShell(titleText, body, actions = "", large = false) {
 }
 
 function renderBedModal(bed) {
-  const used = new Set(bedsForYear().filter((item) => item.id !== bed?.id).map((item) => item.number));
-  const number = bed?.number || [...Array(10)].map((_, index) => index + 1).find((value) => !used.has(value));
-  const width = splitInches(bed?.widthIn || 48);
-  const height = splitInches(bed?.heightIn || 96);
-  const body = `<form id="bed-form" class="form-grid"><input type="hidden" name="id" value="${bed?.id || ""}"><label class="field full"><span>Bed number</span><div class="choice-row">${[...Array(10)].map((_, index) => index + 1).map((value) => `<button type="button" class="choice ${value === number ? "selected" : ""}" data-field-choice="number" data-value="${value}" ${used.has(value) ? "disabled" : ""}>${value}</button>`).join("")}</div><input type="hidden" name="number" value="${number}"></label><label class="field"><span>Width</span>${dimensionInputs("bed-width", width)}</label><label class="field"><span>Length</span>${dimensionInputs("bed-height", height)}</label><label class="field full"><span>Rotation</span><div class="choice-row"><button type="button" class="choice ${!bed?.rotation ? "selected" : ""}" data-field-choice="rotation" data-value="0">0°</button><button type="button" class="choice ${Number(bed?.rotation) === 90 ? "selected" : ""}" data-field-choice="rotation" data-value="90">90°</button></div><input type="hidden" name="rotation" value="${bed?.rotation || 0}"></label><label class="field full"><span>Notes (optional)</span><textarea name="notes" maxlength="1000" placeholder="Anything useful about this bed…">${esc(bed?.notes || "")}</textarea></label></form>`;
-  const deleteButton = bed ? '<button class="danger-button" data-action="delete-bed">Delete bed</button>' : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
-  return modalShell(bed ? `Edit Bed ${bed.number}` : "Add a Bed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-bed">Save</button>`);
+  const width = splitInches(bed.widthIn);
+  const height = splitInches(bed.heightIn);
+  const body = `<form id="bed-form" class="form-grid"><input type="hidden" name="id" value="${bed.id}"><label class="field"><span>Width</span>${dimensionInputs("bed-width", width)}</label><label class="field"><span>Length</span>${dimensionInputs("bed-height", height)}</label><label class="field full"><span>Rotation</span><div class="choice-row"><button type="button" class="choice ${!bed.rotation ? "selected" : ""}" data-field-choice="rotation" data-value="0">0°</button><button type="button" class="choice ${Number(bed.rotation) === 90 ? "selected" : ""}" data-field-choice="rotation" data-value="90">90°</button></div><input type="hidden" name="rotation" value="${bed.rotation || 0}"></label><label class="field full"><span>Notes (optional)</span><textarea name="notes" maxlength="1000" placeholder="Anything useful about this bed…">${esc(bed.notes || "")}</textarea></label></form>`;
+  const isLastBed = bedsForYear().length <= 1;
+  const deleteButton = isLastBed ? `<button class="danger-button" disabled title="The last bed can’t be deleted">Delete bed</button>` : '<button class="danger-button" data-action="delete-bed">Delete bed</button>';
+  return modalShell("Edit Bed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-bed">Save</button>`);
 }
 
 function renderPlantModal(plant) {
@@ -744,8 +771,13 @@ function renderPlantModal(plant) {
   const sizeW = splitInches(initial.widthIn || 12);
   const sizeH = splitInches(initial.heightIn || 12);
   const seeds = [...state.data.seeds].sort((a, b) => a.commonName.localeCompare(b.commonName));
-  const selectedSeedId = initial.seedId || seeds[0]?.id || "";
-  const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><label class="field full"><span>Seed</span><select name="seedId" required>${seeds.map((seed) => `<option value="${seed.id}" ${seed.id === selectedSeedId ? "selected" : ""}>${esc(seed.commonName)}</option>`).join("")}</select></label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Anything specific to this planting…">${esc(initial.notes || "")}</textarea></label></form>`;
+  const selectedSeedId = state.modal.seedId !== undefined ? state.modal.seedId : (initial.seedId || "");
+  const selectedSeed = seeds.find((seed) => seed.id === selectedSeedId);
+  const query = state.modal.seedQuery ?? (selectedSeed?.commonName || "");
+  const trimmedQuery = query.trim().toLowerCase();
+  const matches = trimmedQuery ? seeds.filter((seed) => seed.commonName.toLowerCase().includes(trimmedQuery)) : seeds;
+  const suggestList = state.modal.seedSuggestOpen ? `<div class="seed-suggest-list">${matches.length ? matches.map((seed) => `<button type="button" class="seed-suggest-item" data-action="select-seed-suggestion" data-id="${seed.id}"><span class="seed-suggest-avatar">${seedAvatarInner(seed)}</span><span>${esc(seed.commonName)}</span></button>`).join("") : '<div class="seed-suggest-empty">No matching seeds</div>'}</div>` : "";
+  const body = `<form id="plant-form" class="form-grid"><input type="hidden" name="id" value="${plant?.id || ""}"><input type="hidden" name="seedId" value="${esc(selectedSeedId)}"><label class="field full seed-typeahead"><span>Seed</span><input type="text" data-seed-search autocomplete="off" placeholder="Search your seeds…" value="${esc(query)}" required>${suggestList}${!selectedSeed ? '<small class="form-note">Type to search, then tap a seed to select it.</small>' : ""}</label><label class="field"><span>Plant width</span>${dimensionInputs("plant-width", sizeW)}</label><label class="field"><span>Plant length</span>${dimensionInputs("plant-height", sizeH)}</label><label class="field"><span>Status</span><select name="status">${STATUSES.map((status) => `<option value="${status}" ${status === (initial.status || "planned") ? "selected" : ""}>${title(status)}</option>`).join("")}</select></label><label class="field full"><span>Notes</span><textarea name="notes" maxlength="3000" placeholder="Anything specific to this planting…">${esc(initial.notes || "")}</textarea></label></form>`;
   const archive = plant ? `<button class="${plant.archived ? "secondary-button" : "danger-button"}" data-action="archive-plant" data-id="${plant.id}">${plant.archived ? "Restore" : "Archive"}</button>` : '<button class="secondary-button" data-action="close-modal">Cancel</button>';
   return modalShell(plant ? `Edit ${seedFor(plant).commonName || "Plant"}` : "Add a Plant", body, `${archive}<button class="primary-button" type="button" data-action="save-plant">Save</button>`, true);
 }
@@ -873,14 +905,6 @@ async function ensureWeatherFresh() {
   finally { ensuringWeather = false; }
 }
 
-function firstBedPosition(widthIn, heightIn) {
-  const grid = state.data.settings.gridIn;
-  const index = bedsForYear().length;
-  const x = snap(grid * 2 + (index % 3) * (widthIn + grid * 2));
-  const y = snap(grid * 2 + Math.floor(index / 3) * (heightIn + grid * 2));
-  return { x: clamp(x, 0, Math.max(0, state.data.settings.widthIn - widthIn)), y: clamp(y, 0, Math.max(0, state.data.settings.heightIn - heightIn)) };
-}
-
 function firstPlantPosition(widthIn, heightIn) {
   const grid = state.data.settings.gridIn;
   const index = plantsForYear().length;
@@ -892,27 +916,24 @@ function firstPlantPosition(widthIn, heightIn) {
 async function saveBed(form) {
   const values = new FormData(form);
   const existing = state.data.beds.find((item) => item.id === values.get("id"));
-  const number = Number(values.get("number"));
+  if (!existing) throw new Error("The bed editor could not be found. Close it and try again.");
   const widthIn = snap(toInches(values.get("bed-width-ft"), values.get("bed-width-in")));
   const heightIn = snap(toInches(values.get("bed-height-ft"), values.get("bed-height-in")));
-  if (!Number.isInteger(number) || number < 1 || number > 10) throw new Error("Choose a bed number from 1 to 10.");
-  if (bedsForYear().some((bed) => bed.id !== existing?.id && bed.number === number)) throw new Error(`Bed ${number} already exists in this year.`);
   if (widthIn < 12 || heightIn < 12) throw new Error("Beds must be at least one foot in each direction.");
-  const position = existing || firstBedPosition(widthIn, heightIn);
-  const saving = window.SproutStore.saveBed({ ...existing, id: existing?.id, year: state.year, number, widthIn, heightIn, rotation: Number(values.get("rotation")), notes: values.get("notes"), x: position.x, y: position.y });
+  const saving = window.SproutStore.saveBed({ ...existing, widthIn, heightIn, rotation: Number(values.get("rotation")), notes: values.get("notes") });
   state.modal = null;
   state.mode = "layout";
   render();
   await saving;
   saveFlash();
-  toast(existing ? "Bed updated." : "Bed added. Drag it into place in Beds mode.");
+  toast("Bed updated.");
 }
 
 async function savePlant(form) {
   const values = new FormData(form);
   const existing = state.data.plants.find((item) => item.id === values.get("id"));
   const seed = state.data.seeds.find((item) => item.id === values.get("seedId"));
-  if (!seed) throw new Error("Choose a seed.");
+  if (!seed) throw new Error("Search for a seed and tap it to select it.");
   const widthIn = snap(toInches(values.get("plant-width-ft"), values.get("plant-width-in")));
   const heightIn = snap(toInches(values.get("plant-height-ft"), values.get("plant-height-in")));
   if (widthIn < state.data.settings.gridIn || heightIn < state.data.settings.gridIn) throw new Error("Plant size must be at least one grid square.");
@@ -1091,7 +1112,7 @@ function bindMap() {
   const viewport = $(".map-viewport");
   const world = $(".garden-world");
   if (!viewport || !world) return;
-  const apply = () => { world.style.transform = `translate3d(${state.map.panX}px,${state.map.panY}px,0) scale(${state.map.zoom})`; };
+  const apply = () => { world.style.transform = `translate3d(${state.map.panX}px,${state.map.panY}px,0)`; };
   const fit = () => {
     const width = state.data.settings.widthIn * PX_PER_INCH;
     const height = state.data.settings.heightIn * PX_PER_INCH;
@@ -1100,7 +1121,7 @@ function bindMap() {
     state.map.panX = (viewport.clientWidth - width * zoom) / 2;
     state.map.panY = (viewport.clientHeight - height * zoom) / 2;
     state.map.initializedYear = state.year;
-    apply();
+    render();
   };
   if (state.map.initializedYear !== state.year) fit(); else apply();
   viewport._gardenFit = fit;
@@ -1115,7 +1136,7 @@ function bindMap() {
     state.map.zoom = next;
     state.map.panX = localX - worldX * next;
     state.map.panY = localY - worldY * next;
-    apply();
+    render();
   };
 
   const pointers = new Map();
@@ -1204,10 +1225,10 @@ function bindMap() {
         h = clamp(snap(interaction.originalH + inchDy), minSize, maxH - interaction.originalY);
       }
       interaction.nextX = x; interaction.nextY = y; interaction.nextW = w; interaction.nextH = h;
-      interaction.node.style.left = `${x * PX_PER_INCH}px`;
-      interaction.node.style.top = `${y * PX_PER_INCH}px`;
-      interaction.node.style.width = `${w * PX_PER_INCH}px`;
-      interaction.node.style.height = `${h * PX_PER_INCH}px`;
+      interaction.node.style.left = `${x * PX_PER_INCH * state.map.zoom}px`;
+      interaction.node.style.top = `${y * PX_PER_INCH * state.map.zoom}px`;
+      interaction.node.style.width = `${w * PX_PER_INCH * state.map.zoom}px`;
+      interaction.node.style.height = `${h * PX_PER_INCH * state.map.zoom}px`;
       return;
     }
     const item = findItem(interaction.type, interaction.id);
@@ -1217,8 +1238,8 @@ function bindMap() {
     const x = clamp(snap(interaction.originalX + dx / state.map.zoom / PX_PER_INCH), 0, Math.max(0,maxX));
     const y = clamp(snap(interaction.originalY + dy / state.map.zoom / PX_PER_INCH), 0, Math.max(0,maxY));
     interaction.nextX = x; interaction.nextY = y;
-    interaction.node.style.left = `${x * PX_PER_INCH}px`;
-    interaction.node.style.top = `${y * PX_PER_INCH}px`;
+    interaction.node.style.left = `${x * PX_PER_INCH * state.map.zoom}px`;
+    interaction.node.style.top = `${y * PX_PER_INCH * state.map.zoom}px`;
   };
   viewport.onpointerup = async (event) => {
     pointers.delete(event.pointerId);
@@ -1326,7 +1347,6 @@ document.addEventListener("click", async (event) => {
     if (action === "seed-category") { state.seedCategory = button.dataset.category; render(); }
     if (action === "year-subtab") { state.yearSubTab = button.dataset.subtab; render(); }
     if (action === "mode") { state.mode = button.dataset.mode; state.selected = null; render(); }
-    if (action === "add-bed") openModal({ type: "bed" });
     if (action === "edit-bed") openModal({ type: "bed", id: button.dataset.id });
     if (action === "add-plant") { if (!state.data.seeds.length) throw new Error("Add a seed first."); openModal({ type: "plant" }); }
     if (action === "edit-plant") openModal({ type: "plant", id: button.dataset.id });
@@ -1335,6 +1355,11 @@ document.addEventListener("click", async (event) => {
     if (action === "add-seed") openModal({ type: "seed" });
     if (action === "edit-seed") openModal({ type: "seed", id: button.dataset.id });
     if (action === "seed-details") openModal({ type: "seedDetails", id: button.dataset.id });
+    if (action === "select-seed-suggestion") {
+      const seed = seedById(button.dataset.id);
+      if (seed && state.modal) { state.modal.seedId = seed.id; state.modal.seedQuery = seed.commonName; state.modal.seedSuggestOpen = false; }
+      render();
+    }
     if (action === "category-dates") openModal({ type: "categoryDates" });
     if (action === "log-monthly-update") openModal({ type: "monthlyUpdate", year: state.year, month: defaultMonthlyMonth(state.year) });
     if (action === "toggle-add-update") { state.addUpdateOpen = true; render(); }
@@ -1427,9 +1452,21 @@ document.addEventListener("click", async (event) => {
       button.textContent = "Duplicating…";
       await duplicateYear(form);
     }
-    if (action === "delete-bed") { const bed = state.data.beds.find((item) => item.id === state.modal.id); state.modal = { type: "confirm", title: `Delete Bed ${bed.number}?`, message: "This removes the bed from the grid. It is purely visual and does not affect any plants.", confirmLabel: "Delete bed", run: async () => { await window.SproutStore.deleteBed(bed); state.selected = null; } }; render(); }
+    if (action === "delete-bed") {
+      const bed = state.data.beds.find((item) => item.id === state.modal.id);
+      if (bedsForYear().length <= 1) { toast("The last bed can’t be deleted.", "error"); return; }
+      state.modal = { type: "confirm", title: "Delete this bed?", message: "This removes the bed from the grid. It is purely visual and does not affect any plants.", confirmLabel: "Delete bed", run: async () => { await window.SproutStore.deleteBed(bed); state.selected = null; } };
+      render();
+    }
     if (action === "delete-seed") { const seed = state.data.seeds.find((item) => item.id === button.dataset.id); state.modal = { type: "confirm", title: `Delete ${seed.commonName}?`, message: "This removes the seed. Plants already using it will keep their history but lose their seed details.", confirmLabel: "Delete seed", run: async () => { await window.SproutStore.deleteSeed(seed); state.selected = null; } }; render(); }
     if (action === "archive-plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); await window.SproutStore.archivePlant(plant, !plant.archived); state.modal = null; state.selected = null; render(); toast(plant.archived ? "Plant restored." : "Plant moved to the archive."); }
+    if (action === "set-plant-status") {
+      const plant = state.data.plants.find((item) => item.id === button.dataset.id);
+      await window.SproutStore.savePlant({ ...plant, status: button.dataset.status });
+      render();
+      saveFlash();
+      toast(`Marked ${title(button.dataset.status)}.`);
+    }
     if (action === "delete-log") { const log = state.data.logs.find((item) => item.id === button.dataset.id); if (confirm("Delete this journal entry?")) { await window.SproutStore.deleteLog(log); render(); } }
     if (action === "delete-photo") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); if (confirm("Remove this photo from the plant?")) { await window.SproutStore.savePlant({ ...plant, photos: plant.photos.filter((_, index) => index !== Number(button.dataset.index)) }); render(); } }
     if (action === "delete-year-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); if (confirm("Delete this update?")) { await window.SproutStore.deleteYearUpdate(entry); render(); } }
@@ -1483,6 +1520,40 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.id === "plant-search") { state.search = event.target.value; const position = event.target.selectionStart; render(); requestAnimationFrame(() => { const input = $("#plant-search"); input?.focus(); input?.setSelectionRange(position, position); }); }
+  if (event.target.matches("[data-seed-search]") && state.modal) {
+    state.modal.seedQuery = event.target.value;
+    state.modal.seedId = "";
+    state.modal.seedSuggestOpen = true;
+    const position = event.target.selectionStart;
+    render();
+    requestAnimationFrame(() => {
+      const input = $("[data-seed-search]");
+      input?.focus();
+      input?.setSelectionRange(position, position);
+    });
+  }
+});
+
+document.addEventListener("focusin", (event) => {
+  if (!event.target.matches("[data-seed-search]") || !state.modal || state.modal.seedSuggestOpen) return;
+  state.modal.seedSuggestOpen = true;
+  const position = event.target.selectionStart;
+  render();
+  requestAnimationFrame(() => {
+    const input = $("[data-seed-search]");
+    input?.focus();
+    input?.setSelectionRange(position, position);
+  });
+});
+
+document.addEventListener("focusout", (event) => {
+  if (!event.target.matches("[data-seed-search]")) return;
+  setTimeout(() => {
+    if (state.modal?.seedSuggestOpen && !document.activeElement?.matches("[data-seed-search]")) {
+      state.modal.seedSuggestOpen = false;
+      render();
+    }
+  }, 160);
 });
 
 document.addEventListener("submit", async (event) => {
@@ -1531,7 +1602,7 @@ function copySelected() {
   if (state.tab !== "garden" || state.modal || yearIsReadOnly()) return;
   if (state.mode === "layout" && state.selected?.type === "bed") {
     const bed = state.data.beds.find((item) => item.id === state.selected.id);
-    if (bed) { state.clipboard = { type: "bed", data: bed }; toast(`Bed ${bed.number} copied.`); }
+    if (bed) { state.clipboard = { type: "bed", data: bed }; toast("Bed copied."); }
   } else if (state.mode === "plants" && state.selected?.type === "plant") {
     const plant = state.data.plants.find((item) => item.id === state.selected.id);
     if (plant) { state.clipboard = { type: "plant", data: plant }; toast("Plant copied."); }
@@ -1548,11 +1619,12 @@ async function pasteClipboard() {
     const used = new Set(bedsForYear().map((item) => item.number));
     let number = Number(source.number) + 1;
     while (used.has(number) && number <= 10) number++;
-    if (number > 10 || bedsForYear().length >= 10) { toast("No bed numbers available.", "error"); return; }
+    if (number > 10 || bedsForYear().length >= 10) { toast("This year already has the maximum of 10 beds.", "error"); return; }
     const saved = await window.SproutStore.saveBed({ year: state.year, number, widthIn: source.widthIn, heightIn: source.heightIn, rotation: source.rotation, notes: source.notes, x, y });
     state.selected = { type: "bed", id: saved.id };
     render();
-    toast(`Bed ${number} pasted.`);
+    saveFlash();
+    toast("Bed added.");
   } else if (state.clipboard.type === "plant" && state.mode === "plants") {
     const saved = await window.SproutStore.savePlant({ year: state.year, seedId: source.seedId, widthIn: source.widthIn, heightIn: source.heightIn, status: source.status, notes: source.notes, x, y });
     state.selected = { type: "plant", id: saved.id };
@@ -1598,7 +1670,7 @@ function importBackup() {
 }
 
 window.addEventListener("sprout:auth", (event) => { state.user = event.detail; render(); if (state.user) { ensureInitialYear(); ensureWeatherFresh(); } });
-window.addEventListener("sprout:data", (event) => { state.data = event.detail; if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR); render(); if (state.user) { ensureInitialYear(); ensureWeatherFresh(); } });
+window.addEventListener("sprout:data", (event) => { state.data = event.detail; state.dataReady = true; if (!state.year) state.year = Number(state.data.settings.activeYear || CURRENT_YEAR); render(); if (state.user) { ensureInitialYear(); ensureWeatherFresh(); } });
 window.addEventListener("sprout:error", (event) => toast(event.detail, "error"));
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
