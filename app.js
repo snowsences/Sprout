@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=61";
+import "./firebase-client.js?v=62";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -479,12 +479,22 @@ function renderYearCard() {
     <div class="year-card-body">
       <div class="section-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
       ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?"></textarea><label class="text-button year-update-photo-label">${icon("camera")} Add photo<input class="hidden" type="file" accept="image/*" name="photo"></label><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
-      <div class="year-timeline">${!state.dataReady ? skeletonTimelineRows() : updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
+      <div class="year-timeline">${!state.dataReady ? skeletonTimelineRows() : updates.length ? renderUpdateEntries(updates, readOnly) : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
   </aside>`;
 }
 
-function renderUpdateEntry(entry, readOnly) {
+function yearUpdatePhotos(year) {
+  return yearUpdatesForYear(year).filter((entry) => entry.photo).map((entry) => entry.photo);
+}
+
+function renderUpdateEntries(updates, readOnly) {
+  const photoIndexById = new Map();
+  updates.filter((entry) => entry.photo).forEach((entry, index) => photoIndexById.set(entry.id, index));
+  return updates.map((entry) => renderUpdateEntry(entry, readOnly, photoIndexById.get(entry.id))).join("");
+}
+
+function renderUpdateEntry(entry, readOnly, photoIndex) {
   if (entry.type === "monthly") {
     const chips = (entry.ratings || []).map((r) => `<span class="rating-chip">${esc(seedById(r.seedId)?.commonName || "Plant")}: ${r.rating == null ? "N/A" : "★".repeat(r.rating)}</span>`).join("");
     return `<article class="timeline-entry timeline-monthly">
@@ -494,7 +504,7 @@ function renderUpdateEntry(entry, readOnly) {
       ${readOnly ? "" : `<button class="text-button" data-action="edit-monthly-update" data-id="${entry.id}">Edit</button> · <button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}
     </article>`;
   }
-  return `<article class="timeline-entry">${entry.photo ? `<img class="timeline-photo" src="${esc(entry.photo.url)}" alt="Update photo" loading="lazy">` : ""}<div class="timeline-date">${shortDate(entry.date)}</div>${entry.text ? `<p>${esc(entry.text)}</p>` : ""}${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`;
+  return `<article class="timeline-entry">${entry.photo ? `<img class="timeline-photo" src="${esc(entry.photo.url)}" alt="Update photo" loading="lazy" data-action="open-lightbox" data-gallery="year-update" data-gallery-id="${entry.year}" data-index="${photoIndex}">` : ""}<div class="timeline-date">${shortDate(entry.date)}</div>${entry.text ? `<p>${esc(entry.text)}</p>` : ""}${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`;
 }
 
 function renderYearTab() {
@@ -1585,6 +1595,7 @@ document.addEventListener("click", async (event) => {
       if (source === "plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.galleryId); photos = plant?.photos || []; }
       else if (source === "seed-gallery") { photos = seedGalleryPhotos(button.dataset.galleryId); }
       else if (source === "seed-cover") { const seed = seedById(button.dataset.galleryId); photos = seed?.coverPhoto ? [seed.coverPhoto] : []; }
+      else if (source === "year-update") { photos = yearUpdatePhotos(Number(button.dataset.galleryId)); }
       if (photos.length) {
         const index = Math.min(Number(button.dataset.index || 0), photos.length - 1);
         openModal({ type: "lightbox", photos, index });
