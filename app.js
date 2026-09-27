@@ -303,7 +303,7 @@ function renderYearCard() {
     </div>
     <div class="year-card-body">
       <div class="section-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
-      ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?" required></textarea><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
+      ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?"></textarea><label class="text-button year-update-photo-label">${icon("camera")} Add photo<input class="hidden" type="file" accept="image/*" name="photo"></label><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
       <div class="year-timeline">${updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
   </aside>`;
@@ -319,21 +319,21 @@ function renderUpdateEntry(entry, readOnly) {
       ${readOnly ? "" : `<button class="text-button" data-action="edit-monthly-update" data-id="${entry.id}">Edit</button> · <button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}
     </article>`;
   }
-  return `<article class="timeline-entry"><div class="timeline-date">${shortDate(entry.date)}</div><p>${esc(entry.text)}</p>${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`;
+  return `<article class="timeline-entry">${entry.photo ? `<img class="timeline-photo" src="${esc(entry.photo.url)}" alt="Update photo" loading="lazy">` : ""}<div class="timeline-date">${shortDate(entry.date)}</div>${entry.text ? `<p>${esc(entry.text)}</p>` : ""}${readOnly ? "" : `<button class="text-button" data-action="delete-year-update" data-id="${entry.id}">Delete</button>`}</article>`;
 }
 
 function renderYearTab() {
   const year = state.year;
   return `<section class="tab-page year-tab">
     <div class="year-subtabs segmented" role="tablist" aria-label="Year view">
-      <button data-action="year-subtab" data-subtab="calendar" class="${state.yearSubTab === "calendar" ? "active" : ""}">Calendar</button>
       <button data-action="year-subtab" data-subtab="updates" class="${state.yearSubTab === "updates" ? "active" : ""}">Updates</button>
       <button data-action="year-subtab" data-subtab="insights" class="${state.yearSubTab === "insights" ? "active" : ""}">Insights</button>
+      <button data-action="year-subtab" data-subtab="calendar" class="${state.yearSubTab === "calendar" ? "active" : ""}">Calendar</button>
     </div>
     <div class="year-tab-body">
-      <div class="year-pane ${state.yearSubTab === "calendar" ? "active" : ""}">${renderCalendar(year)}</div>
       <div class="year-pane year-pane-updates ${state.yearSubTab === "updates" ? "active" : ""}">${renderYearCard()}</div>
       <div class="year-pane ${state.yearSubTab === "insights" ? "active" : ""}">${renderInsights(year)}</div>
+      <div class="year-pane ${state.yearSubTab === "calendar" ? "active" : ""}">${renderCalendar(year)}</div>
     </div>
   </section>`;
 }
@@ -900,7 +900,12 @@ async function fetchWeatherHistory() {
 
 async function saveYearUpdate(form) {
   const values = new FormData(form);
-  await window.SproutStore.addYearUpdate({ year: Number(values.get("year")), date: values.get("date"), text: values.get("text") });
+  const year = Number(values.get("year"));
+  const text = String(values.get("text") || "").trim();
+  const file = values.get("photo");
+  if (!text && !file?.size) throw new Error("Add a note or a photo before saving.");
+  const photo = file?.size ? await uploadPhoto(file, `update-${year}-${Date.now()}`) : null;
+  await window.SproutStore.addYearUpdate({ year, date: values.get("date"), text, photo });
   state.addUpdateOpen = false;
   render();
   toast("Update added.");

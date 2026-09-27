@@ -396,6 +396,7 @@ window.SproutStore = {
       year: Number(input.year),
       date: input.date || new Date().toISOString().slice(0, 10),
       text: String(input.text || "").trim(),
+      photo: input.photo || null,
       createdAt: now(),
       ...actor(),
     };

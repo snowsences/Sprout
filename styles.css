@@ -104,6 +104,9 @@ h1,h2,h3,strong{font-weight:500}
 .timeline-entry::before{content:"";position:absolute;left:-5px;top:16px;width:8px;height:8px;border-radius:50%;background:var(--green)}
 .timeline-date{font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
 .timeline-entry p{margin:0;line-height:1.4;white-space:pre-wrap}
+.timeline-photo{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:8px}
+.year-update-photo-label{display:inline-flex;align-items:center;gap:6px;justify-self:start}
+.year-update-photo-label svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
 .timeline-entry .text-button{padding:6px 0 0;font-size:13px}
 .year-tab{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;overflow:hidden;background:var(--paper)}
 .year-subtabs{margin:12px 20px 0}
