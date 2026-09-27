@@ -30,6 +30,7 @@ const state = {
   year: null,
   seedCategory: "all",
   yearSubTab: "calendar",
+  addUpdateOpen: false,
   search: "",
   modal: null,
   selected: null,
@@ -298,11 +299,11 @@ function renderYearCard() {
   return `<aside class="year-card">
     <div class="year-cover">
       ${record.coverPhoto ? `<img src="${esc(record.coverPhoto.url)}" alt="${year} cover photo">` : `<div class="year-cover-empty">${icon("camera")}<span>No cover photo</span></div>`}
-      ${readOnly ? "" : `<label class="text-button year-cover-upload">${record.coverPhoto ? "Change photo" : "Add cover photo"}<input class="hidden" type="file" accept="image/*" data-year-cover="${year}"></label>`}
+      ${readOnly ? "" : `<label class="year-cover-upload" aria-label="${record.coverPhoto ? "Change photo" : "Add cover photo"}">${icon("edit")}<input class="hidden" type="file" accept="image/*" data-year-cover="${year}"></label>`}
     </div>
     <div class="year-card-body">
-      <div class="section-head"><h3>${year} Updates</h3>${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}</div>
-      ${readOnly ? "" : `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?" required></textarea><button class="primary-button full" type="submit">Add update</button></form>`}
+      <div class="section-head"><h3>${year} Updates</h3><div class="section-head-actions">${readOnly ? "" : `<button class="text-button" data-action="log-monthly-update">Log Monthly Update</button>`}${readOnly || state.addUpdateOpen ? "" : `<button class="text-button" data-action="toggle-add-update">+ Add Update</button>`}</div></div>
+      ${!readOnly && state.addUpdateOpen ? `<form id="year-update-form" class="year-update-form"><input type="hidden" name="year" value="${year}"><input name="date" type="date" value="${today}" max="${today}" required><textarea name="text" maxlength="1000" placeholder="What happened in the garden today?" required></textarea><div class="year-update-form-actions"><button class="secondary-button" type="button" data-action="cancel-add-update">Cancel</button><button class="primary-button" type="submit">Save</button></div></form>` : ""}
       <div class="year-timeline">${updates.length ? updates.map((entry) => renderUpdateEntry(entry, readOnly)).join("") : '<div class="form-note">No updates yet this year.</div>'}</div>
     </div>
   </aside>`;
@@ -900,6 +901,7 @@ async function fetchWeatherHistory() {
 async function saveYearUpdate(form) {
   const values = new FormData(form);
   await window.SproutStore.addYearUpdate({ year: Number(values.get("year")), date: values.get("date"), text: values.get("text") });
+  state.addUpdateOpen = false;
   render();
   toast("Update added.");
 }
@@ -1191,6 +1193,8 @@ document.addEventListener("click", async (event) => {
     if (action === "seed-details") openModal({ type: "seedDetails", id: button.dataset.id });
     if (action === "category-dates") openModal({ type: "categoryDates" });
     if (action === "log-monthly-update") openModal({ type: "monthlyUpdate", year: state.year, month: defaultMonthlyMonth(state.year) });
+    if (action === "toggle-add-update") { state.addUpdateOpen = true; render(); }
+    if (action === "cancel-add-update") { state.addUpdateOpen = false; render(); }
     if (action === "edit-monthly-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); openModal({ type: "monthlyUpdate", year: entry.year, month: entry.month }); }
     if (action === "open-monthly-banner") { state.year = Number(button.dataset.year); state.tab = "year"; state.yearSubTab = "updates"; openModal({ type: "monthlyUpdate", year: Number(button.dataset.year), month: Number(button.dataset.month) }); }
     if (action === "fetch-weather") {
@@ -1293,7 +1297,7 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("change", async (event) => {
-  if (event.target.matches('[data-action="change-year"]')) { state.year = Number(event.target.value); state.selected = null; state.map.initializedYear = null; if (yearIsReadOnly()) state.mode = "browse"; render(); }
+  if (event.target.matches('[data-action="change-year"]')) { state.year = Number(event.target.value); state.selected = null; state.map.initializedYear = null; state.addUpdateOpen = false; if (yearIsReadOnly()) state.mode = "browse"; render(); }
   if (event.target.id === "monthly-update-month") { state.modal.month = Number(event.target.value); render(); }
   if (event.target.matches("[data-photo-plant]")) {
     const plant = state.data.plants.find((item) => item.id === event.target.dataset.photoPlant);
