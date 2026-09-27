@@ -15,6 +15,9 @@ import {
   doc,
   onSnapshot,
   writeBatch,
+  query,
+  orderBy,
+  limit,
 } from "./vendor/firebase-firestore.js";
 import { FIREBASE_CONFIG, SPROUT_CONFIG } from "./config.js";
 
@@ -119,8 +122,9 @@ async function commitMany(operations, activity) {
 }
 
 function subscribe(key, fallback) {
+  const target = key === "activity" ? query(refs.activity, orderBy("createdAt", "desc"), limit(500)) : refs[key];
   stops.push(onSnapshot(
-    refs[key],
+    target,
     { includeMetadataChanges: true },
     (snapshot) => {
       if (key === "settings") {

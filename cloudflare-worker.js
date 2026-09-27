@@ -3,6 +3,7 @@
  * Required Worker secrets: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY,
  * CLOUDINARY_API_SECRET. Variables: ALLOWED_ORIGIN and FIREBASE_API_KEY.
  */
+const ALLOWED_UIDS = ["FRSVgPioqZfYkWlBWYUdnPjEEO03", "eVuZNR5ZMtcBGsksyepA9fDkGVv1"];
 const json = (body, status = 200, origin = "*") =>
   new Response(status === 204 ? null : JSON.stringify(body), {
     status,
@@ -45,8 +46,7 @@ export default {
       if (!identityResponse.ok) return json({ error: "Invalid sign-in." }, 401, allowedOrigin);
       const identity = await identityResponse.json();
       const user = identity.users?.[0];
-      const email = String(user?.email || "").toLowerCase();
-      if (!user?.emailVerified || !["allenkevinc@gmail.com", "meganec96@gmail.com"].includes(email)) {
+      if (!user?.localId || !ALLOWED_UIDS.includes(user.localId)) {
         return json({ error: "Account not allowed." }, 403, allowedOrigin);
       }
 

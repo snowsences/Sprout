@@ -42,6 +42,7 @@ const state = {
 let ensuringInitialYear = false;
 
 const esc = (value = "") => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+const safeHttpUrl = (value) => { try { const url = new URL(String(value || ""), window.location.href); return url.protocol === "http:" || url.protocol === "https:" ? url.href : ""; } catch { return ""; } };
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const snap = (value) => Math.round(value / state.data.settings.gridIn) * state.data.settings.gridIn;
 const title = (value) => String(value || "").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -692,7 +693,7 @@ function renderSeedDetails(seed) {
   const plants = plantsForSeedThisYear(seed.id);
   const categoryId = categoryForSeed(seed);
   const dates = categoryDatesFor(categoryId);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryId)}</p></div><div class="detail-actions"><label class="text-button">${seed.coverPhoto ? "Change photo" : "Add photo"}<input class="hidden" type="file" accept="image/*" data-seed-cover="${seed.id}"></label><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Plant date</span><strong>📅 ${monthDayLabel(dates.plantDate)}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>📅 ${monthDayLabel(dates.startIndoorsDate)}</strong></div>` : ""}<div class="fact"><span>Seed link</span><strong>${seed.seedLink ? `🔗 <a href="${esc(seed.seedLink)}" target="_blank" rel="noopener noreferrer">Buy</a>` : "🔗 —"}</strong></div><div class="fact"><span>Taste</span><strong>${seed.tasteRating ? starRatingHtml(seed.tasteRating) : "—"}</strong></div><div class="fact"><span>Productivity</span><strong>${seed.productivityRating ? starRatingHtml(seed.productivityRating) : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
+  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryId)}</p></div><div class="detail-actions"><label class="text-button">${seed.coverPhoto ? "Change photo" : "Add photo"}<input class="hidden" type="file" accept="image/*" data-seed-cover="${seed.id}"></label><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Plant date</span><strong>📅 ${monthDayLabel(dates.plantDate)}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>📅 ${monthDayLabel(dates.startIndoorsDate)}</strong></div>` : ""}<div class="fact"><span>Seed link</span><strong>${safeHttpUrl(seed.seedLink) ? `🔗 <a href="${esc(safeHttpUrl(seed.seedLink))}" target="_blank" rel="noopener noreferrer">Buy</a>` : "🔗 —"}</strong></div><div class="fact"><span>Taste</span><strong>${seed.tasteRating ? starRatingHtml(seed.tasteRating) : "—"}</strong></div><div class="fact"><span>Productivity</span><strong>${seed.productivityRating ? starRatingHtml(seed.productivityRating) : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
   return modalShell(seed.commonName, body, "", true);
 }
 
@@ -856,7 +857,9 @@ async function saveSeed(form) {
   const seedIcon = categoryById(category).icon;
   const tasteRating = values.get("rating-taste");
   const productivityRating = values.get("rating-productivity");
-  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), tasteRating: tasteRating ? Number(tasteRating) : null, productivityRating: productivityRating ? Number(productivityRating) : null, seedLink: values.get("seedLink"), notes: values.get("notes") };
+  const seedLinkInput = String(values.get("seedLink") || "").trim();
+  if (seedLinkInput && !safeHttpUrl(seedLinkInput)) throw new Error("Seed link must be a valid http:// or https:// URL.");
+  const seed = { id: existing?.id, commonName, category, icon: seedIcon, color: values.get("color"), tasteRating: tasteRating ? Number(tasteRating) : null, productivityRating: productivityRating ? Number(productivityRating) : null, seedLink: seedLinkInput, notes: values.get("notes") };
   const saved = await window.SproutStore.saveSeed(seed);
   state.modal = { type: "seedDetails", id: saved.id };
   render();
@@ -900,11 +903,23 @@ async function saveMonthlyUpdate(form) {
   toast(`${monthLabel(month)} update saved.`);
 }
 
+function latestCachedDate() {
+  let latest = null;
+  for (const yearDoc of state.data.weather) {
+    for (const day of yearDoc.days || []) {
+      if (!latest || day.date > latest) latest = day.date;
+    }
+  }
+  return latest;
+}
+
 async function fetchWeatherHistory() {
-  const start = "2021-01-01";
   const now = new Date();
-  const end = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
-  const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${GARDEN_LOCATION.lat}&longitude=${GARDEN_LOCATION.lon}&start_date=${start}&end_date=${end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,sunshine_duration&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FLos_Angeles`;
+  const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+  const latest = latestCachedDate();
+  const start = latest ? new Date(new Date(latest + "T00:00:00").getTime() + 86400000).toISOString().slice(0, 10) : "2021-01-01";
+  if (start > yesterday) return;
+  const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${GARDEN_LOCATION.lat}&longitude=${GARDEN_LOCATION.lon}&start_date=${start}&end_date=${yesterday}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,sunshine_duration&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=America%2FLos_Angeles`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Could not fetch weather data.");
   const json = await response.json();
@@ -923,8 +938,10 @@ async function fetchWeatherHistory() {
       sunshineHrs: sunshineSeconds != null ? sunshineSeconds / 3600 : null,
     });
   }
-  for (const [year, days] of byYear) {
-    await window.SproutStore.saveWeatherYear(year, days);
+  for (const [year, newDays] of byYear) {
+    const existingYear = state.data.weather.find((w) => Number(w.year) === year);
+    const mergedDays = existingYear ? [...existingYear.days.filter((d) => !newDays.some((nd) => nd.date === d.date)), ...newDays].sort((a, b) => a.date.localeCompare(b.date)) : newDays;
+    await window.SproutStore.saveWeatherYear(year, mergedDays);
   }
 }
 
