@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=43";
+import "./firebase-client.js?v=44";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -41,8 +41,22 @@ const state = {
   busy: false,
   clipboard: null,
   map: { zoom: 1, panX: 20, panY: 20, initializedYear: null },
+  installPromptAvailable: false,
 };
 let ensuringInitialYear = false;
+let deferredInstallPrompt = null;
+const isStandaloneDisplay = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  state.installPromptAvailable = true;
+  render();
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  state.installPromptAvailable = false;
+  render();
+});
 
 const esc = (value = "") => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 const safeHttpUrl = (value) => { try { const url = new URL(String(value || ""), window.location.href); return url.protocol === "http:" || url.protocol === "https:" ? url.href : ""; } catch { return ""; } };
@@ -235,7 +249,7 @@ function enableElasticScroll(selector) {
   document.addEventListener("touchend", release);
   document.addEventListener("touchcancel", release);
 }
-enableElasticScroll(".tab-page,.modal-body,.year-pane,.year-card");
+enableElasticScroll(".tab-page:not(.garden-page),.modal-body,.year-pane,.year-card");
 
 function render() {
   if (!state.user) {
@@ -749,7 +763,16 @@ function renderSettings() {
     <section class="settings-card wide"><h2>Years</h2><p>The active year can be edited. Older years remain read-only snapshots.</p><div class="button-row">${years.map((year) => `<button class="secondary-button" data-action="view-year" data-year="${year.year}">${year.year}${Number(year.year) === Number(state.data.settings.activeYear) ? " · Active" : ""}</button>`).join("")}<button class="primary-button" data-action="duplicate-year">Duplicate a year</button></div></section>
     <section class="settings-card"><h2>Backup</h2><p>Download all Sprout data as JSON, or merge a previous backup into Firestore.</p><div class="button-row"><button class="secondary-button" data-action="export">${icon("download")} Export</button><button class="secondary-button" data-action="import">${icon("upload")} Import</button></div></section>
     <section class="settings-card"><h2>Connections</h2><p>Firebase: <strong>${window.SproutStore.configured ? "Configured" : "Needs setup"}</strong><br>Photos: <strong>${SPROUT_CONFIG.cloudinaryWorkerUrl.startsWith("PASTE_") ? "Worker URL needed" : "Configured"}</strong></p><p>Photo uploads are resized in the browser to 1500px and kept below about 3.5MB.</p></section>
-    <section class="settings-card"><h2>App</h2><p>Sprout stays open like a native app, so it won't always notice a new version on its own. Refresh to grab the latest.</p><button class="secondary-button" data-action="refresh-app">${icon("refresh")} Refresh app</button></section>
+    <section class="settings-card"><h2>App</h2>
+      <p>Install Sprout to your home screen for a native app feel.</p>
+      ${isStandaloneDisplay()
+        ? '<p class="form-note">Already installed as an app.</p>'
+        : state.installPromptAvailable
+          ? `<div class="button-row"><button class="secondary-button" data-action="install-app">${icon("download")} Install app</button></div>`
+          : '<p class="form-note">On iPhone/iPad: tap the Share icon in Safari, then "Add to Home Screen". On Android/desktop Chrome, an install button will appear here once the browser offers it.</p>'}
+      <p>Sprout stays open like a native app, so it won't always notice a new version on its own. Refresh to grab the latest.</p>
+      <div class="button-row"><button class="secondary-button" data-action="refresh-app">${icon("refresh")} Refresh app</button></div>
+    </section>
     ${renderActivityCard()}
   </div></section>`;
 }
@@ -1152,7 +1175,16 @@ function bindMap() {
     state.map.initializedYear = state.year;
     render();
   };
-  if (state.map.initializedYear !== state.year) fit(); else apply();
+  const resetView = () => {
+    const width = state.data.settings.widthIn * PX_PER_INCH;
+    const height = state.data.settings.heightIn * PX_PER_INCH;
+    state.map.zoom = 1;
+    state.map.panX = Math.max(20, (viewport.clientWidth - width) / 2);
+    state.map.panY = Math.max(20, (viewport.clientHeight - height) / 2);
+    state.map.initializedYear = state.year;
+    render();
+  };
+  if (state.map.initializedYear !== state.year) resetView(); else apply();
   viewport._gardenFit = fit;
   viewport._gardenZoom = (factor, clientX = viewport.getBoundingClientRect().left + viewport.clientWidth / 2, clientY = viewport.getBoundingClientRect().top + viewport.clientHeight / 2) => {
     const rect = viewport.getBoundingClientRect();
@@ -1176,7 +1208,26 @@ function bindMap() {
     if (event.target.closest(".selection-card,button,input,select,textarea,label")) return;
     pointers.set(event.pointerId, point(event));
     viewport.setPointerCapture(event.pointerId);
-    if (pointers.size >= 2) { interaction = null; return; }
+    if (pointers.size === 2) {
+      interaction?.node?.classList.remove("item-lifted");
+      const [p1, p2] = [...pointers.values()];
+      const rect = viewport.getBoundingClientRect();
+      const midX = (p1.x + p2.x) / 2 - rect.left;
+      const midY = (p1.y + p2.y) / 2 - rect.top;
+      const bakedZoom = state.map.zoom;
+      interaction = {
+        type: "pinch",
+        startDist: Math.max(1, Math.hypot(p1.x - p2.x, p1.y - p2.y)),
+        bakedZoom,
+        anchorInchX: (midX - state.map.panX) / (bakedZoom * PX_PER_INCH),
+        anchorInchY: (midY - state.map.panY) / (bakedZoom * PX_PER_INCH),
+        pendingZoom: bakedZoom,
+        pendingPanX: state.map.panX,
+        pendingPanY: state.map.panY,
+      };
+      return;
+    }
+    if (pointers.size > 2) return;
     const handle = event.target.closest("[data-resize]");
     if (handle) {
       const kind = handle.dataset.resize;
@@ -1217,7 +1268,24 @@ function bindMap() {
   viewport.onpointermove = (event) => {
     if (!pointers.has(event.pointerId)) return;
     pointers.set(event.pointerId, point(event));
-    if (pointers.size >= 2) return;
+    if (pointers.size >= 2) {
+      if (interaction?.type === "pinch") {
+        const [p1, p2] = [...pointers.values()];
+        const rect = viewport.getBoundingClientRect();
+        const midX = (p1.x + p2.x) / 2 - rect.left;
+        const midY = (p1.y + p2.y) / 2 - rect.top;
+        const currentDist = Math.max(1, Math.hypot(p1.x - p2.x, p1.y - p2.y));
+        const targetZoom = clamp(interaction.bakedZoom * (currentDist / interaction.startDist), .2, 4);
+        const liveFactor = targetZoom / interaction.bakedZoom;
+        const panX = midX - targetZoom * PX_PER_INCH * interaction.anchorInchX;
+        const panY = midY - targetZoom * PX_PER_INCH * interaction.anchorInchY;
+        interaction.pendingZoom = targetZoom;
+        interaction.pendingPanX = panX;
+        interaction.pendingPanY = panY;
+        world.style.transform = `translate3d(${panX}px,${panY}px,0) scale(${liveFactor})`;
+      }
+      return;
+    }
     if (!interaction) return;
     const dx = event.clientX - interaction.startX;
     const dy = event.clientY - interaction.startY;
@@ -1273,6 +1341,16 @@ function bindMap() {
   viewport.onpointerup = async (event) => {
     pointers.delete(event.pointerId);
     viewport.classList.remove("dragging");
+    if (interaction?.type === "pinch") {
+      if (pointers.size < 2) {
+        state.map.zoom = interaction.pendingZoom;
+        state.map.panX = interaction.pendingPanX;
+        state.map.panY = interaction.pendingPanY;
+        interaction = null;
+        render();
+      }
+      return;
+    }
     interaction?.node?.classList.remove("item-lifted");
     if (interaction && interaction.type.startsWith("resize-") && interaction.moved) {
       const kind = interaction.type === "resize-bed" ? "bed" : "plant";
@@ -1495,13 +1573,22 @@ document.addEventListener("click", async (event) => {
       await window.SproutStore.savePlant({ ...plant, status: button.dataset.status });
       render();
       saveFlash();
-      toast(`Marked ${title(button.dataset.status)}.`);
     }
     if (action === "delete-log") { const log = state.data.logs.find((item) => item.id === button.dataset.id); if (confirm("Delete this journal entry?")) { await window.SproutStore.deleteLog(log); render(); } }
     if (action === "delete-photo") { const plant = state.data.plants.find((item) => item.id === button.dataset.id); if (confirm("Remove this photo from the plant?")) { await window.SproutStore.savePlant({ ...plant, photos: plant.photos.filter((_, index) => index !== Number(button.dataset.index)) }); render(); } }
     if (action === "delete-year-update") { const entry = state.data.yearUpdates.find((item) => item.id === button.dataset.id); if (confirm("Delete this update?")) { await window.SproutStore.deleteYearUpdate(entry); render(); } }
     if (action === "undo-activity") { const entry = state.data.activity.find((item) => item.id === button.dataset.id); await window.SproutStore.undoLast(entry); toast("Last action undone."); }
     if (action === "confirm-action") { const run = state.modal.run; await run(); state.modal = null; render(); }
+    if (action === "install-app") {
+      if (!deferredInstallPrompt) return;
+      button.disabled = true;
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      state.installPromptAvailable = false;
+      render();
+      if (choice.outcome === "accepted") toast("Sprout installed.");
+    }
     if (action === "refresh-app") {
       button.disabled = true;
       button.textContent = "Refreshing…";

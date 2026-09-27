@@ -82,7 +82,7 @@ h1,h2,h3,strong{font-weight:500}
 .rh-se{left:100%;top:100%;transform:translate(-50%,-50%);cursor:nwse-resize}
 .plant-marker.selected{outline:3px solid #fff;box-shadow:0 0 0 6px var(--green-dark),inset 0 0 0 2px rgba(255,255,255,.22)}
 .plant-icon{font-size:20px;line-height:1;filter:drop-shadow(0 1px 1px rgba(255,255,255,.55));pointer-events:none}
-.plant-label{position:static;max-width:100%;padding:0;background:none;color:#fff;font-size:16px;line-height:1.1;font-weight:500;text-align:center;white-space:normal;word-break:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-shadow:0 1px 2px rgba(18,40,24,.55);pointer-events:none}
+.plant-label{position:static;max-width:100%;padding:0;background:none;color:#fff;font-size:12px;line-height:1.1;font-weight:500;text-align:center;white-space:normal;word-break:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-shadow:0 1px 2px rgba(18,40,24,.55);pointer-events:none}
 .year-card{height:100%;display:flex;flex-direction:column;overflow-y:auto;background:var(--surface)}
 .year-cover{position:relative;flex:0 0 auto;width:100%;aspect-ratio:9/4;background:var(--surface-2);overflow:hidden;margin-top:8px}
 .year-cover img{width:100%;height:100%;object-fit:cover;display:block}
