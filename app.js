@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=54";
+import "./firebase-client.js?v=55";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -163,6 +163,8 @@ function icon(name) {
     refresh: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    "chevron-left": '<path d="m15 6-6 6 6 6"/>',
+    "chevron-right": '<path d="m9 6 6 6-6 6"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.garden}</svg>`;
 }
@@ -406,7 +408,8 @@ function renderSelectionPlant(plant) {
   const prevStatus = statusIndex > 0 ? STATUSES[statusIndex - 1] : null;
   const nextStatus = statusIndex >= 0 && statusIndex < STATUSES.length - 1 ? STATUSES[statusIndex + 1] : null;
   const statusShortcuts = !yearIsReadOnly() && (prevStatus || nextStatus) ? `<div class="status-shortcuts">${prevStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${prevStatus}">← ${title(prevStatus)}</button>` : ""}${nextStatus ? `<button class="status-shortcut" data-action="set-plant-status" data-id="${plant.id}" data-status="${nextStatus}">${title(nextStatus)} →</button>` : ""}</div>` : "";
-  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="selection-copy"><h3>${esc(seed.commonName || "Plant")}</h3><p>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)} · ${title(plant.status)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${statusShortcuts}<div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
+  const addPhoto = yearIsReadOnly() ? "" : `<label class="primary-button full photo-capture">${icon("camera")}Add Photo<input class="hidden" type="file" accept="image/*" capture="environment" data-photo-plant="${plant.id}"></label>`;
+  return `<aside class="selection-card"><div class="selection-head"><div class="selection-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="selection-copy"><h3>${esc(seed.commonName || "Plant")}</h3><p>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)} · ${title(plant.status)}</p></div><button class="close-button" data-action="clear-selection" aria-label="Close">×</button></div>${statusShortcuts}${addPhoto}<div class="selection-actions"><button class="secondary-button" data-action="plant-details" data-id="${plant.id}">Details</button>${yearIsReadOnly() ? "" : `<button class="primary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button>`}</div></aside>`;
 }
 
 function renderSelectionBed(bed) {
@@ -793,6 +796,7 @@ function renderModal() {
   if (state.modal.type === "monthlyUpdate") return renderMonthlyUpdateModal();
   if (state.modal.type === "duplicate") return renderDuplicateModal();
   if (state.modal.type === "confirm") return renderConfirmModal();
+  if (state.modal.type === "lightbox") return renderLightbox();
   return "";
 }
 
@@ -842,12 +846,23 @@ function renderSeedModal(seed) {
   return modalShell(seed ? `Edit ${seed.commonName}` : "Add a Seed", body, `${deleteButton}<button class="primary-button" type="button" data-action="save-seed">Save</button>`, true);
 }
 
+function seedGalleryPhotos(seedId) {
+  return state.data.plants
+    .filter((plant) => plant.seedId === seedId)
+    .flatMap((plant) => (plant.photos || []).map((photo) => ({ ...photo, plantId: plant.id })))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
 function renderSeedDetails(seed) {
   if (!seed) return "";
   const plants = plantsForSeedThisYear(seed.id);
   const categoryId = categoryForSeed(seed);
   const dates = categoryDatesFor(categoryId);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryId)}</p></div><div class="detail-actions"><label class="text-button">${seed.coverPhoto ? "Change photo" : "Add photo"}<input class="hidden" type="file" accept="image/*" data-seed-cover="${seed.id}"></label><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Plant date</span><strong>📅 ${monthDayLabel(dates.plantDate)}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>📅 ${monthDayLabel(dates.startIndoorsDate)}</strong></div>` : ""}<div class="fact"><span>Seed link</span><strong>${safeHttpUrl(seed.seedLink) ? `🔗 <a href="${esc(safeHttpUrl(seed.seedLink))}" target="_blank" rel="noopener noreferrer">Buy</a>` : "🔗 —"}</strong></div><div class="fact"><span>Taste</span><strong>${seed.tasteRating ? starRatingHtml(seed.tasteRating) : "—"}</strong></div><div class="fact"><span>Productivity</span><strong>${seed.productivityRating ? starRatingHtml(seed.productivityRating) : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
+  const gallery = seedGalleryPhotos(seed.id);
+  const heroIcon = seed.coverPhoto
+    ? `<button type="button" class="detail-icon photo-tap" style="--plant-color:${esc(seed.color)}" data-action="open-lightbox" data-gallery="seed-cover" data-gallery-id="${seed.id}" aria-label="View cover photo">${seedAvatarInner(seed)}</button>`
+    : `<div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div>`;
+  const body = `<div class="detail-hero">${heroIcon}<div class="detail-title"><h2>${esc(seed.commonName)}</h2><p>${title(categoryId)}</p></div><div class="detail-actions"><label class="text-button">${seed.coverPhoto ? "Change photo" : "Add photo"}<input class="hidden" type="file" accept="image/*" data-seed-cover="${seed.id}"></label><button class="secondary-button" data-action="edit-seed" data-id="${seed.id}">Edit</button></div></div><div class="fact-grid"><div class="fact"><span>Plant date</span><strong>📅 ${monthDayLabel(dates.plantDate)}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>📅 ${monthDayLabel(dates.startIndoorsDate)}</strong></div>` : ""}<div class="fact"><span>Seed link</span><strong>${safeHttpUrl(seed.seedLink) ? `🔗 <a href="${esc(safeHttpUrl(seed.seedLink))}" target="_blank" rel="noopener noreferrer">Buy</a>` : "🔗 —"}</strong></div><div class="fact"><span>Taste</span><strong>${seed.tasteRating ? starRatingHtml(seed.tasteRating) : "—"}</strong></div><div class="fact"><span>Productivity</span><strong>${seed.productivityRating ? starRatingHtml(seed.productivityRating) : "—"}</strong></div></div>${seed.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(seed.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3></div><div class="photo-grid">${gallery.length ? gallery.map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(seed.commonName || "Seed")} photo" loading="lazy" data-action="open-lightbox" data-gallery="seed-gallery" data-gallery-id="${seed.id}" data-index="${index}"></div>`).join("") : '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>'}</div><div class="section-head"><h3>Plants in ${state.year}</h3></div><div class="plant-list">${plants.length ? plants.map((plant) => `<button class="plant-row" data-action="plant-details" data-id="${plant.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</h3><p>${plant.notes ? esc(plant.notes) : "No notes"}</p></span><span class="status-pill ${esc(plant.status)}">${esc(plant.status)}</span></button>`).join("") : '<div class="form-note">No active plants from this seed in the current year.</div>'}</div>`;
   return modalShell(seed.commonName, body, "", true);
 }
 
@@ -904,7 +919,7 @@ function renderPlantDetails(plant) {
   const seed = seedFor(plant);
   const dates = categoryDatesFor(categoryForSeed(seed));
   const logs = state.data.logs.filter((entry) => entry.plantId === plant.id).sort((a, b) => b.createdAt - a.createdAt);
-  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="detail-title"><h2>${esc(seed.commonName || "Plant")}</h2><p>${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Plant date</span><strong>${dates.plantDate ? shortDate(`${plant.year}-${dates.plantDate}`) : "Not set"}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>${dates.startIndoorsDate ? shortDate(`${plant.year}-${dates.startIndoorsDate}`) : "Not set"}</strong></div>` : ""}</div><div class="section-head"><h3>Seed</h3><button class="text-button" data-action="seed-details" data-id="${seed.id}">View seed</button></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(seed.commonName || "Plant")} photo" loading="lazy">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
+  const body = `<div class="detail-hero"><div class="detail-icon" style="--plant-color:${esc(seed.color)}">${seedAvatarInner(seed)}</div><div class="detail-title"><h2>${esc(seed.commonName || "Plant")}</h2><p>${title(plant.status)}</p></div>${yearIsReadOnly() ? "" : `<div class="detail-actions"><button class="secondary-button" data-action="edit-plant" data-id="${plant.id}">Edit</button></div>`}</div><div class="fact-grid"><div class="fact"><span>Size</span><strong>${dimensions(plant.widthIn)} × ${dimensions(plant.heightIn)}</strong></div><div class="fact"><span>Plant date</span><strong>${dates.plantDate ? shortDate(`${plant.year}-${dates.plantDate}`) : "Not set"}</strong></div>${dates.startIndoors ? `<div class="fact"><span>Start indoors</span><strong>${dates.startIndoorsDate ? shortDate(`${plant.year}-${dates.startIndoorsDate}`) : "Not set"}</strong></div>` : ""}</div><div class="section-head"><h3>Seed</h3><button class="text-button" data-action="seed-details" data-id="${seed.id}">View seed</button></div>${plant.notes ? `<div class="section-head"><h3>Notes</h3></div><div class="notes-box">${esc(plant.notes)}</div>` : ""}<div class="section-head"><h3>Photos</h3>${yearIsReadOnly() ? "" : `<label class="text-button">Add photo<input class="hidden" type="file" accept="image/*" data-photo-plant="${plant.id}"></label>`}</div><div class="photo-grid">${(plant.photos || []).map((photo, index) => `<div class="photo"><img src="${esc(photo.url)}" alt="${esc(seed.commonName || "Plant")} photo" loading="lazy" data-action="open-lightbox" data-gallery="plant" data-gallery-id="${plant.id}" data-index="${index}">${yearIsReadOnly() ? "" : `<button class="photo-delete" data-action="delete-photo" data-id="${plant.id}" data-index="${index}" aria-label="Delete photo">×</button>`}</div>`).join("")}${!(plant.photos || []).length ? '<div class="form-note" style="grid-column:1/-1">No photos yet.</div>' : ""}</div><div class="section-head"><h3>Journal</h3>${yearIsReadOnly() ? "" : `<button class="text-button" data-action="add-log" data-id="${plant.id}">Add entry</button>`}</div><div class="journal-list">${logs.length ? logs.map((entry) => `<article class="journal-entry"><div class="journal-head"><span class="journal-type">${esc(entry.type)}</span><span class="journal-date">${dateText(entry.createdAt)}</span></div>${entry.note ? `<p>${esc(entry.note)}</p>` : ""}${entry.photos?.[0] ? `<img class="journal-photo" src="${esc(entry.photos[0].url)}" alt="Journal photo" loading="lazy">` : ""}<div class="journal-meta">${esc(entry.actorName || entry.actorEmail || "Someone")}${yearIsReadOnly() ? "" : ` · <button class="text-button" data-action="delete-log" data-id="${entry.id}">Delete</button>`}</div></article>`).join("") : '<div class="form-note">No journal entries yet.</div>'}</div>`;
   return modalShell(seed.commonName || "Plant", body, "", true);
 }
 
@@ -925,6 +940,21 @@ function renderDuplicateModal() {
 function renderConfirmModal() {
   const modal = state.modal;
   return modalShell(modal.title, `<p>${esc(modal.message)}</p>`, `<button class="secondary-button" data-action="close-modal">Cancel</button><button class="danger-button" data-action="confirm-action">${esc(modal.confirmLabel || "Delete")}</button>`);
+}
+
+function renderLightbox() {
+  const { photos, index } = state.modal;
+  const photo = photos[index];
+  if (!photo) return "";
+  const anim = state.modalAnim || "";
+  const showNav = photos.length > 1;
+  return `<div class="lightbox-layer ${anim}" data-action="modal-backdrop">
+    <button class="lightbox-close" data-action="close-modal" aria-label="Close">${icon("close")}</button>
+    ${showNav ? `<button class="lightbox-nav lightbox-prev" data-action="lightbox-prev" aria-label="Previous photo">${icon("chevron-left")}</button>` : ""}
+    <img class="lightbox-image" src="${esc(photo.url)}" alt="Photo">
+    ${showNav ? `<button class="lightbox-nav lightbox-next" data-action="lightbox-next" aria-label="Next photo">${icon("chevron-right")}</button>` : ""}
+    ${photo.createdAt ? `<div class="lightbox-caption">${dateText(photo.createdAt)}</div>` : ""}
+  </div>`;
 }
 
 function openModal(modal) {
@@ -1500,6 +1530,19 @@ document.addEventListener("click", async (event) => {
     if (action === "add-seed") openModal({ type: "seed" });
     if (action === "edit-seed") openModal({ type: "seed", id: button.dataset.id });
     if (action === "seed-details") openModal({ type: "seedDetails", id: button.dataset.id });
+    if (action === "open-lightbox") {
+      const source = button.dataset.gallery;
+      let photos = [];
+      if (source === "plant") { const plant = state.data.plants.find((item) => item.id === button.dataset.galleryId); photos = plant?.photos || []; }
+      else if (source === "seed-gallery") { photos = seedGalleryPhotos(button.dataset.galleryId); }
+      else if (source === "seed-cover") { const seed = seedById(button.dataset.galleryId); photos = seed?.coverPhoto ? [seed.coverPhoto] : []; }
+      if (photos.length) {
+        const index = Math.min(Number(button.dataset.index || 0), photos.length - 1);
+        openModal({ type: "lightbox", photos, index });
+      }
+    }
+    if (action === "lightbox-prev" && state.modal) { state.modal.index = (state.modal.index - 1 + state.modal.photos.length) % state.modal.photos.length; render(); }
+    if (action === "lightbox-next" && state.modal) { state.modal.index = (state.modal.index + 1) % state.modal.photos.length; render(); }
     if (action === "select-seed-suggestion") {
       const seed = seedById(button.dataset.id);
       if (seed && state.modal) { state.modal.seedId = seed.id; state.modal.seedQuery = seed.commonName; state.modal.seedSuggestOpen = false; }
@@ -1813,6 +1856,10 @@ async function pasteClipboard() {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.modal) { closeModal(); return; }
+  if (state.modal?.type === "lightbox" && state.modal.photos.length > 1) {
+    if (event.key === "ArrowLeft") { state.modal.index = (state.modal.index - 1 + state.modal.photos.length) % state.modal.photos.length; render(); return; }
+    if (event.key === "ArrowRight") { state.modal.index = (state.modal.index + 1) % state.modal.photos.length; render(); return; }
+  }
   if (!(event.metaKey || event.ctrlKey)) return;
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
