@@ -141,7 +141,7 @@ h1,h2,h3,strong{font-weight:500}
 .rating-stars{display:flex;align-items:center;gap:2px}
 .rating-star{font-size:22px;line-height:1;color:#d7d3c2;padding:2px}
 .seed-rating{font-size:14px;color:#eda100;vertical-align:middle;white-space:nowrap}
-.seed-rating-half{display:inline-flex}
+.seed-rating-half{display:inline-flex;position:relative;top:-3px}
 .star-slot{position:relative;display:inline-block;color:#e2ded0}
 .star-fg{position:absolute;left:0;top:0;overflow:hidden;white-space:nowrap;color:#eda100}
 .rating-star.selected{color:#eda100}
