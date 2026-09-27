@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=59";
+import "./firebase-client.js?v=60";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -170,6 +170,7 @@ function icon(name) {
 }
 
 function toast(message, kind = "") {
+  if (state.tab === "garden") return;
   let stack = $(".toast-stack");
   if (!stack) {
     stack = document.createElement("div");
