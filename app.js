@@ -31,7 +31,7 @@ const state = {
   year: null,
   seedCategory: "year",
   seedView: "list",
-  yearSubTab: "calendar",
+  yearSubTab: "insights",
   addUpdateOpen: false,
   search: "",
   modal: null,
