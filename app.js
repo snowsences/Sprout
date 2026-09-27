@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=63";
+import "./firebase-client.js?v=64";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -772,7 +772,7 @@ function renderInsights(year) {
   })() : `<div class="empty-state">No Monthly Updates logged yet for ${year}.</div>`;
 
   return `<div class="insights-pane">
-    <div class="insights-section"><div class="section-head"><h3>Weather</h3><button class="text-button" data-action="fetch-weather">${state.data.weather.length ? "Refresh" : "Fetch"} weather history</button></div>${weatherBody}</div>
+    <div class="insights-section"><div class="section-head weather-head"><h3>Weather</h3><button class="text-button" data-action="fetch-weather">${state.data.weather.length ? "Refresh" : "Fetch"} weather history</button></div>${weatherBody}</div>
     <div class="insights-section"><div class="section-head"><h3>Seed Ratings</h3></div>${ratingBody}</div>
   </div>`;
 }
