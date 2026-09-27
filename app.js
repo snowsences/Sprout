@@ -35,6 +35,7 @@ const state = {
   addUpdateOpen: false,
   search: "",
   modal: null,
+  modalAnim: null,
   selected: null,
   mode: "browse",
   busy: false,
@@ -719,7 +720,7 @@ function renderSeeds() {
     const caption = `${esc(seed.commonName)}${avgRating ? ` ${halfStarRatingHtml(avgRating)}` : ""}`;
     const meta = `${title(categoryForSeed(seed))}${lastYear ? ` • Last planted ${lastYear}` : ""}`;
     if (state.seedView === "grid") {
-      return `<button class="seed-card" data-action="seed-details" data-id="${seed.id}"><span class="seed-card-photo" style="--plant-color:${esc(seed.color)}">${seed.coverPhoto?.url ? `<img src="${esc(seed.coverPhoto.url)}" alt="${esc(seed.commonName)} photo" loading="lazy">` : esc(iconForSeed(seed))}</span><span class="seed-card-caption"><h3>${caption}</h3><p>${meta}</p></span></button>`;
+      return `<button class="seed-card" data-action="seed-details" data-id="${seed.id}"><span class="seed-card-photo" style="--plant-color:${esc(seed.color)}">${seed.coverPhoto?.url ? `<img src="${esc(seed.coverPhoto.url)}" alt="${esc(seed.commonName)} photo" loading="lazy">` : esc(iconForSeed(seed))}</span><span class="seed-card-caption"><h3>${esc(seed.commonName)}</h3><p>${avgRating ? halfStarRatingHtml(avgRating) : "—"}</p></span></button>`;
     }
     return `<button class="plant-row" data-action="seed-details" data-id="${seed.id}" style="--plant-color:${esc(seed.color)}"><span class="plant-avatar">${seedAvatarInner(seed)}</span><span class="plant-main"><h3>${caption}</h3><p>${meta}</p></span>${activeCount ? `<span class="status-pill">${activeCount} planted</span>` : ""}</button>`;
   };
@@ -773,7 +774,8 @@ function renderModal() {
 }
 
 function modalShell(titleText, body, actions = "", large = false) {
-  return `<div class="modal-layer" data-action="modal-backdrop"><section class="modal ${large ? "large" : ""}" role="dialog" aria-modal="true" aria-label="${esc(titleText)}"><header class="modal-header"><h2>${esc(titleText)}</h2><button class="close-button" data-action="close-modal" aria-label="Close">×</button></header><div class="modal-body">${body}</div>${actions ? `<footer class="modal-actions">${actions}</footer>` : ""}</section></div>`;
+  const anim = state.modalAnim || "";
+  return `<div class="modal-layer ${anim}" data-action="modal-backdrop"><section class="modal ${large ? "large" : ""} ${anim}" role="dialog" aria-modal="true" aria-label="${esc(titleText)}"><header class="modal-header"><h2>${esc(titleText)}</h2><button class="close-button" data-action="close-modal" aria-label="Close">×</button></header><div class="modal-body">${body}</div>${actions ? `<footer class="modal-actions">${actions}</footer>` : ""}</section></div>`;
 }
 
 function renderBedModal(bed) {
@@ -898,10 +900,18 @@ function renderConfirmModal() {
 }
 
 function openModal(modal) {
-  withTransition("modal-open", () => { state.modal = modal; render(); });
+  state.modal = modal;
+  state.modalAnim = "opening";
+  render();
+  state.modalAnim = null;
   requestAnimationFrame(() => $(".modal input:not([type=hidden]),.modal select,.modal textarea")?.focus());
 }
-function closeModal() { withTransition("modal-close", () => { state.modal = null; render(); }); }
+function closeModal() {
+  if (!state.modal) return;
+  state.modalAnim = "closing";
+  render();
+  setTimeout(() => { state.modal = null; state.modalAnim = null; render(); }, 240);
+}
 
 async function ensureInitialYear() {
   if (!state.user || ensuringInitialYear) return;
