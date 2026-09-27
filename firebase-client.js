@@ -258,8 +258,6 @@ window.SproutStore = {
       normalizedName: normalized,
       icon: input.icon || "🌱",
       color: input.color || "#4f8d5b",
-      sun: input.sun || "medium",
-      water: input.water || "medium",
       notes: input.notes || "",
       seedLink: input.seedLink || "",
       updatedAt: now(),
