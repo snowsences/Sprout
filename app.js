@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=60";
+import "./firebase-client.js?v=61";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -17,6 +17,7 @@ const PLANT_CATEGORIES = [
   { id: "berries", label: "Berries", icon: "🍓" },
   { id: "alliums", label: "Alliums", icon: "🧅" },
   { id: "greens", label: "Greens", icon: "🥬" },
+  { id: "herbs", label: "Herbs", icon: "🌿" },
   { id: "other", label: "Other", icon: "📦" },
 ];
 const COLORS = ["#4f8d5b", "#75a843", "#a7b43c", "#d8a62d", "#df7435", "#c94c49", "#a95a87", "#735ca7", "#3f83a8", "#3b8c83"];
