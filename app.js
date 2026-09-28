@@ -1,4 +1,4 @@
-import "./firebase-client.js?v=64";
+import "./firebase-client.js?v=65";
 import { SPROUT_CONFIG } from "./config.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -69,7 +69,7 @@ const shortDate = (value) => value ? new Intl.DateTimeFormat(undefined, { month:
 const dimensions = (inches) => `${Math.floor(Number(inches) / 12)}′ ${Number(inches) % 12}″`;
 const toInches = (feet, inches) => Math.max(0, Number(feet || 0) * 12 + Number(inches || 0));
 const splitInches = (inches) => ({ feet: Math.floor(Number(inches || 0) / 12), inches: Number(inches || 0) % 12 });
-const yearIsReadOnly = () => Number(state.year) !== Number(state.data.settings.activeYear);
+const yearIsReadOnly = () => Number(state.year) !== Number(state.data.settings.activeYear) && Number(state.year) !== CURRENT_YEAR;
 const bedsForYear = () => state.data.beds.filter((bed) => Number(bed.year) === Number(state.year)).sort((a, b) => a.number - b.number);
 const plantsForYear = () => state.data.plants.filter((plant) => Number(plant.year) === Number(state.year));
 const seedById = (id) => state.data.seeds.find((seed) => seed.id === id);
@@ -271,7 +271,7 @@ function render() {
           <select class="year-select" data-action="change-year" aria-label="Garden year">
             ${years.map((year) => `<option value="${year}" ${Number(year) === Number(state.year) ? "selected" : ""}>${year}</option>`).join("")}
           </select>
-          ${yearIsReadOnly() ? '<span class="readonly-chip">Snapshot</span>' : '<span class="active-chip">Active year</span>'}
+          ${yearIsReadOnly() ? '<span class="readonly-chip">Snapshot</span>' : Number(state.year) === Number(state.data.settings.activeYear) ? '<span class="active-chip">Active year</span>' : '<span class="active-chip">Editable</span>'}
         </div>
         ${state.tab === "garden" ? `<button class="topbar-add-plant" data-action="add-plant" ${yearIsReadOnly() || !state.data.seeds.length ? "disabled" : ""} aria-label="Add plant">${icon("plus")}</button>` : ""}
         <div class="sync-state"><span class="sync-dot"></span><span>${state.data.fromCache ? "Connecting…" : "Up to date"}</span></div>
@@ -822,7 +822,7 @@ function renderSettings() {
   return `<section class="tab-page content-page"><div class="page-heading"><div><h1>Settings</h1><p>Garden size, yearly plans, accounts and backups.</p></div></div><div class="settings-grid">
     <section class="settings-card"><h2>Garden size</h2><p>The permanent six-inch grid fills these real-world dimensions.</p><form id="garden-settings" class="form-grid"><label class="field"><span>Width</span>${dimensionInputs("garden-width", width)}</label><label class="field"><span>Height</span>${dimensionInputs("garden-height", height)}</label><button class="primary-button full field" type="submit">Save garden size</button></form></section>
     <section class="settings-card"><h2>Shared account</h2><p>Only the two approved Google accounts can access this garden.</p><div class="account-row"><div class="account-avatar">${state.user.photoURL ? `<img src="${esc(state.user.photoURL)}" alt="" style="width:44px;height:44px;border-radius:50%">` : "K"}</div><div class="account-copy"><strong>${esc(state.user.displayName || "Signed in")}</strong><span>${esc(state.user.email)}</span></div><button class="secondary-button" data-action="sign-out">Sign out</button></div></section>
-    <section class="settings-card wide"><h2>Years</h2><p>The active year can be edited. Older years remain read-only snapshots.</p><div class="button-row">${years.map((year) => `<button class="secondary-button" data-action="view-year" data-year="${year.year}">${year.year}${Number(year.year) === Number(state.data.settings.activeYear) ? " · Active" : ""}</button>`).join("")}<button class="primary-button" data-action="duplicate-year">Duplicate a year</button></div></section>
+    <section class="settings-card wide"><h2>Years</h2><p>The active year and the current calendar year can be edited. Other years remain read-only snapshots.</p><div class="button-row">${years.map((year) => `<button class="secondary-button" data-action="view-year" data-year="${year.year}">${year.year}${Number(year.year) === Number(state.data.settings.activeYear) ? " · Active" : Number(year.year) === CURRENT_YEAR ? " · Current" : ""}</button>`).join("")}<button class="primary-button" data-action="duplicate-year">Duplicate a year</button></div></section>
     <section class="settings-card"><h2>Backup</h2><p>Download all Sprout data as JSON, or merge a previous backup into Firestore.</p><div class="button-row"><button class="secondary-button" data-action="export">${icon("download")} Export</button><button class="secondary-button" data-action="import">${icon("upload")} Import</button></div></section>
     <section class="settings-card"><h2>Connections</h2><p>Firebase: <strong>${window.SproutStore.configured ? "Configured" : "Needs setup"}</strong><br>Photos: <strong>${SPROUT_CONFIG.cloudinaryWorkerUrl.startsWith("PASTE_") ? "Worker URL needed" : "Configured"}</strong></p><p>Photo uploads are resized in the browser to 1500px and kept below about 3.5MB.</p></section>
     <section class="settings-card"><h2>App</h2>
